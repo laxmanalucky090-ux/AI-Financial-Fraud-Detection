@@ -857,10 +857,10 @@ td {
         ], label_visibility="collapsed")
         st.markdown("---")
         if models_ready():
-            st.success("Models Ready")
+           st.success("Models Ready")
         else:
-           st.caption("Kaggle Credit Card Fraud Detection")
-
+            st.caption("Kaggle Credit Card Fraud Detection")
+          
     stats   = _load_stats()
     results = _load_eval()
 
@@ -1284,10 +1284,6 @@ credit card transactions from September 2013 (48-hour window).
                         st.write(f"**PR-AUC:** {r['pr_auc']:.4f}")
                         st.write(f"**Precision:** {r['precision']:.4f}")
                         st.write(f"**Recall:** {r['recall']:.4f}")
-            st.markdown("---")
-            st.code("python SalapareddiLaxmana_FinancialFraudDetection.py", language="bash")
-            st.code("streamlit run SalapareddiLaxmana_FinancialFraudDetection.py", language="bash")
-
 
 # =============================================================================
 # SECTION 8 — ENTRY POINT
