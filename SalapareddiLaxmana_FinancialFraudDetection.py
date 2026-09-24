@@ -1,29 +1,9 @@
-"""
-SalapareddiLaxmana_FinancialFraudDetection.py
-==============================================
-
-AI-Powered Financial Fraud Detection and Risk Analytics System
-Using Machine Learning on the Kaggle Credit Card Fraud Detection Dataset
-
-Run modes:
-    python SalapareddiLaxmana_FinancialFraudDetection.py
-        -> train all models and save artifacts
-
-    streamlit run SalapareddiLaxmana_FinancialFraudDetection.py
-        -> launch interactive web application
-"""
-
-# =============================================================================
-# IMPORTS
-# =============================================================================
-
 import os
 import sys
 import json
 import time
 import warnings
-
-warnings.filterwarnings("ignore")
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -38,7 +18,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, IsolationForest
-
 from sklearn.metrics import (
     precision_score,
     recall_score,
@@ -52,16 +31,17 @@ from sklearn.metrics import (
 
 from imblearn.over_sampling import SMOTE
 
-import xgboost as xgb
-import lightgbm as lgb
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+
+warnings.filterwarnings("ignore")
 
 
-# =============================================================================
+# ============================================================
 # CONFIGURATION
-# =============================================================================
+# ============================================================
 
 DATA_PATH = "creditcard.csv"
-
 MODELS_DIR = "fraud_models"
 ASSETS_DIR = "fraud_assets"
 
@@ -72,89 +52,94 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(ASSETS_DIR, exist_ok=True)
 
 
-# =============================================================================
-# SECTION 1 - DATA LOADING & PREPROCESSING
-# =============================================================================
+# ============================================================
+# UTILITY FUNCTIONS
+# ============================================================
 
-def load_and_clean(path=DATA_PATH):
-    """Load CSV and remove exact duplicate transactions."""
+def ensure_directories():
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    os.makedirs(ASSETS_DIR, exist_ok=True)
 
-    print("[1/7] Loading dataset ...")
 
+def load_dataset(path=DATA_PATH):
     if not os.path.exists(path):
         raise FileNotFoundError(
-            "Dataset not found: %s. Please place creditcard.csv "
-            "in the same folder as this Python file." % path
+            f"Dataset not found: {path}\n"
+            "Please place creditcard.csv in the project directory."
         )
 
     df = pd.read_csv(path)
-
-    original = len(df)
-
-    df.drop_duplicates(inplace=True)
-    df.reset_index(drop=True, inplace=True)
-
-    print("      Rows before dedup : %d" % original)
-    print("      Duplicates removed : %d" % (original - len(df)))
-    print("      Rows after dedup  : %d" % len(df))
-
     return df
 
 
-def feature_engineer(df):
-    """Create Amount_log and Hour features."""
-
-    print("[2/7] Feature engineering ...")
-
+def clean_dataset(df):
     df = df.copy()
 
-    df["Amount_log"] = np.log1p(df["Amount"])
-    df["Hour"] = (df["Time"] // 3600) % 24
+    duplicate_count = int(df.duplicated().sum())
+
+    if duplicate_count > 0:
+        df = df.drop_duplicates().reset_index(drop=True)
+
+    return df, duplicate_count
+
+
+def feature_engineering(df):
+    df = df.copy()
+
+    if "Amount" in df.columns:
+        df["Amount_log"] = np.log1p(df["Amount"])
+
+    if "Time" in df.columns:
+        df["Hour"] = (df["Time"] / 3600) % 24
 
     return df
 
 
-def split_and_scale(df):
-    """
-    Stratified 80/20 split.
-    RobustScaler is fitted only on training data.
-    SMOTE is applied only to the training data.
-    """
+def get_feature_columns(df):
+    excluded = {"Class"}
 
-    print("[3/7] Train/test split (stratified 80/20) ...")
-
-    feature_cols = [
-        c for c in df.columns
-        if c not in ("Class", "Time", "Amount")
+    features = [
+        col for col in df.columns
+        if col not in excluded
     ]
 
-    X = df[feature_cols]
-    y = df["Class"]
+    return features
 
-    X_tr, X_te, y_tr, y_te = train_test_split(
+
+# ============================================================
+# DATA PREPARATION
+# ============================================================
+
+def prepare_data(df):
+    df = feature_engineering(df)
+
+    feature_columns = get_feature_columns(df)
+
+    X = df[feature_columns].copy()
+    y = df["Class"].astype(int).copy()
+
+    X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
         test_size=TEST_SIZE,
+        stratify=y,
         random_state=RANDOM_STATE,
-        stratify=y
     )
-
-    print(
-        "      Train: %d | Fraud: %d"
-        % (len(X_tr), y_tr.sum())
-    )
-
-    print(
-        "      Test : %d | Fraud: %d"
-        % (len(X_te), y_te.sum())
-    )
-
-    print("[4/7] Scaling (RobustScaler, fit on train only) ...")
 
     scaler = RobustScaler()
 
-    X_tr_s = scaler.fit_transform(X_tr)
-    X_te_s = scaler.transform(X_te)
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    smote = SMOTE(
+        random_state=RANDOM_STATE,
+        sampling_strategy="auto"
+    )
+
+    X_train_resampled, y_train_resampled = smote.fit_resample(
+        X_train_scaled,
+        y_train
+    )
 
     joblib.dump(
         scaler,
@@ -162,1767 +147,427 @@ def split_and_scale(df):
     )
 
     joblib.dump(
-        feature_cols,
-        os.path.join(MODELS_DIR, "feature_cols.joblib")
-    )
-
-    # Original unbalanced training data for Isolation Forest
-    X_tr_orig = X_tr_s.copy()
-    y_tr_orig = y_tr.copy()
-
-    print("[5/7] SMOTE on training set only ...")
-
-    smote = SMOTE(random_state=RANDOM_STATE)
-
-    X_tr_bal, y_tr_bal = smote.fit_resample(
-        X_tr_s,
-        y_tr
-    )
-
-    print(
-        "      Fraud after SMOTE: %d | Total: %d"
-        % (y_tr_bal.sum(), len(y_tr_bal))
+        feature_columns,
+        os.path.join(MODELS_DIR, "feature_columns.joblib")
     )
 
     return (
-        X_tr_bal,
-        y_tr_bal,
-        X_te_s,
-        y_te,
-        X_tr_orig,
-        y_tr_orig,
-        feature_cols,
+        X_train_scaled,
+        X_test_scaled,
+        y_train,
+        y_test,
+        X_train_resampled,
+        y_train_resampled,
+        feature_columns,
         scaler,
     )
 
 
-# =============================================================================
-# SECTION 2 - EDA VISUALISATIONS
-# =============================================================================
+# ============================================================
+# EDA
+# ============================================================
 
 def generate_eda(df):
-    """Generate and save EDA charts."""
+    ensure_directories()
 
-    print("[6/7] Generating EDA visualisations ...")
+    eda_files = {}
 
-    sns.set_theme(
-        style="whitegrid",
-        font_scale=1.0
+    # --------------------------------------------------------
+    # Class Distribution
+    # --------------------------------------------------------
+
+    plt.figure(figsize=(8, 5))
+
+    sns.countplot(
+        data=df,
+        x="Class"
     )
 
-    # -------------------------------------------------------------------------
-    # 1. CLASS DISTRIBUTION
-    # -------------------------------------------------------------------------
-
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(12, 5)
-    )
-
-    fig.suptitle(
-        "Class Distribution",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    counts = df["Class"].value_counts()
-
-    labels = [
-        "Legitimate",
-        "Fraud"
-    ]
-
-    vals = [
-        counts.get(0, 0),
-        counts.get(1, 0)
-    ]
-
-    total = sum(vals)
-
-    colors = [
-        "#2563EB",
-        "#DC2626"
-    ]
-
-    axes[0].bar(
-        labels,
-        vals,
-        color=colors,
-        width=0.5
-    )
-
-    for i, (v, lbl) in enumerate(
-        zip(vals, labels)
-    ):
-        axes[0].text(
-            i,
-            v + 500,
-            "%d\n(%.2f%%)"
-            % (v, 100 * v / total),
-            ha="center",
-            fontsize=10
-        )
-
-    axes[0].set_title(
-        "Transaction Counts"
-    )
-
-    axes[0].set_ylabel(
-        "Count"
-    )
-
-    axes[1].pie(
-        vals,
-        labels=labels,
-        colors=colors,
-        autopct="%1.3f%%",
-        startangle=90,
-        wedgeprops={
-            "edgecolor": "white",
-            "linewidth": 2
-        }
-    )
-
-    axes[1].set_title(
-        "Class Proportion"
-    )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_class_distribution.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # 2. AMOUNT DISTRIBUTION
-    # -------------------------------------------------------------------------
-
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(14, 5)
-    )
-
-    fig.suptitle(
-        "Transaction Amount by Class",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    for ax, log in zip(
-        axes,
-        [False, True]
-    ):
-
-        for cls, lbl, col in [
-            (0, "Legitimate", "#2563EB"),
-            (1, "Fraud", "#DC2626")
-        ]:
-
-            values = df.loc[
-                df["Class"] == cls,
-                "Amount"
-            ]
-
-            if log:
-                values = np.log1p(values)
-
-            ax.hist(
-                values,
-                bins=60,
-                alpha=0.6,
-                label=lbl,
-                color=col
-            )
-
-        ax.set_xlabel(
-            "log1p(Amount)"
-            if log
-            else "Amount ($)"
-        )
-
-        ax.set_ylabel(
-            "Count"
-        )
-
-        ax.set_title(
-            "Log-Transformed"
-            if log
-            else "Raw Amount"
-        )
-
-        ax.legend()
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_amount_distribution.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # 3. TIME DISTRIBUTION
-    # -------------------------------------------------------------------------
-
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(14, 5)
-    )
-
-    fig.suptitle(
-        "Time Distribution",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    for ax, cls, lbl, col in [
-        (axes[0], 0, "Legitimate", "#2563EB"),
-        (axes[1], 1, "Fraud", "#DC2626")
-    ]:
-
-        ax.hist(
-            df.loc[
-                df["Class"] == cls,
-                "Time"
-            ],
-            bins=48,
-            color=col,
-            alpha=0.85
-        )
-
-        ax.set_title(lbl)
-
-        ax.set_xlabel(
-            "Time (seconds)"
-        )
-
-        ax.set_ylabel(
-            "Count"
-        )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_time_distribution.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # 4. FRAUD BY HOUR
-    # -------------------------------------------------------------------------
-
-    df2 = df.copy()
-
-    df2["Hour"] = (
-        df2["Time"] // 3600
-    ) % 24
-
-    hourly = (
-        df2.groupby(
-            ["Hour", "Class"]
-        )
-        .size()
-        .unstack(fill_value=0)
-    )
-
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(14, 5)
-    )
-
-    fig.suptitle(
-        "Transactions by Hour of Day",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    if 0 in hourly.columns:
-
-        axes[0].bar(
-            hourly.index,
-            hourly[0],
-            color="#2563EB",
-            alpha=0.85
-        )
-
-        axes[0].set_title(
-            "Legitimate"
-        )
-
-        axes[0].set_xlabel(
-            "Hour"
-        )
-
-        axes[0].set_ylabel(
-            "Count"
-        )
-
-    if 1 in hourly.columns:
-
-        axes[1].bar(
-            hourly.index,
-            hourly[1],
-            color="#DC2626",
-            alpha=0.85
-        )
-
-        axes[1].set_title(
-            "Fraudulent"
-        )
-
-        axes[1].set_xlabel(
-            "Hour"
-        )
-
-        axes[1].set_ylabel(
-            "Count"
-        )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_fraud_by_hour.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # 5. AMOUNT BOXPLOT
-    # -------------------------------------------------------------------------
-
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(12, 5)
-    )
-
-    fig.suptitle(
-        "Amount Boxplot by Class",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    for ax, log in zip(
-        axes,
-        [False, True]
-    ):
-
-        legitimate = df.loc[
-            df["Class"] == 0,
-            "Amount"
-        ]
-
-        fraud = df.loc[
-            df["Class"] == 1,
-            "Amount"
-        ]
-
-        if log:
-            legitimate = np.log1p(
-                legitimate
-            )
-            fraud = np.log1p(
-                fraud
-            )
-
-        ax.boxplot(
-            [legitimate, fraud],
-            patch_artist=True
-        )
-
-        ax.set_xticks(
-            [1, 2]
-        )
-
-        ax.set_xticklabels(
-            [
-                "Legitimate",
-                "Fraud"
-            ]
-        )
-
-        ax.set_title(
-            "log1p(Amount)"
-            if log
-            else "Raw Amount ($)"
-        )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_amount_boxplot.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # 6. TOP FEATURES
-    # -------------------------------------------------------------------------
-
-    sample = df.sample(
-        min(10000, len(df)),
-        random_state=42
-    )
-
-    v_cols = [
-        c for c in sample.columns
-        if c.startswith("V")
-    ]
-
-    corr = (
-        sample[
-            v_cols + ["Class"]
-        ]
-        .corr()["Class"]
-        .drop("Class")
-        .abs()
-    )
-
-    top10 = corr.nlargest(
-        10
-    ).index.tolist()
-
-    fig, axes = plt.subplots(
-        2,
-        5,
-        figsize=(18, 8)
-    )
-
-    fig.suptitle(
-        "Top 10 Features by Correlation with Class",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    axes = axes.flatten()
-
-    for ax, feat in zip(
-        axes,
-        top10
-    ):
-
-        ax.boxplot(
-            [
-                df.loc[
-                    df["Class"] == 0,
-                    feat
-                ],
-                df.loc[
-                    df["Class"] == 1,
-                    feat
-                ]
-            ],
-            patch_artist=True
-        )
-
-        ax.set_xticks(
-            [1, 2]
-        )
-
-        ax.set_xticklabels(
-            ["Legit", "Fraud"]
-        )
-
-        ax.set_title(
-            feat,
-            fontsize=11
-        )
-
+    plt.title("Transaction Class Distribution")
+    plt.xlabel("Class (0 = Legitimate, 1 = Fraud)")
+    plt.ylabel("Transaction Count")
     plt.tight_layout()
 
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_top_features.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
+    path = os.path.join(
+        ASSETS_DIR,
+        "class_distribution.png"
     )
 
-    plt.close(fig)
+    plt.savefig(path, dpi=160)
+    plt.close()
 
-    # -------------------------------------------------------------------------
-    # 7. CORRELATION HEATMAP
-    # -------------------------------------------------------------------------
+    eda_files["class_distribution"] = path
 
-    sample2 = df.sample(
-        min(5000, len(df)),
-        random_state=42
-    ).copy()
+    # --------------------------------------------------------
+    # Amount Distribution
+    # --------------------------------------------------------
 
-    sample2["Amount_log"] = np.log1p(
-        sample2["Amount"]
+    plt.figure(figsize=(9, 5))
+
+    sns.histplot(
+        data=df,
+        x="Amount",
+        bins=50,
+        kde=True
     )
 
-    v2 = [
-        c for c in sample2.columns
-        if c.startswith("V")
-    ]
+    plt.title("Transaction Amount Distribution")
+    plt.xlabel("Amount")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
 
-    corr2 = sample2[
-        v2 + ["Amount_log", "Class"]
-    ].corr()
-
-    fig, ax = plt.subplots(
-        figsize=(18, 14)
+    path = os.path.join(
+        ASSETS_DIR,
+        "amount_distribution.png"
     )
 
-    mask = np.triu(
-        np.ones_like(
-            corr2,
-            dtype=bool
+    plt.savefig(path, dpi=160)
+    plt.close()
+
+    eda_files["amount_distribution"] = path
+
+    # --------------------------------------------------------
+    # Fraud Amount Distribution
+    # --------------------------------------------------------
+
+    plt.figure(figsize=(9, 5))
+
+    sns.boxplot(
+        data=df,
+        x="Class",
+        y="Amount"
+    )
+
+    plt.title("Transaction Amount by Class")
+    plt.xlabel("Class")
+    plt.ylabel("Amount")
+    plt.tight_layout()
+
+    path = os.path.join(
+        ASSETS_DIR,
+        "amount_by_class.png"
+    )
+
+    plt.savefig(path, dpi=160)
+    plt.close()
+
+    eda_files["amount_by_class"] = path
+
+    # --------------------------------------------------------
+    # Transactions Over Time
+    # --------------------------------------------------------
+
+    if "Time" in df.columns:
+
+        temp = df.copy()
+
+        temp["Hour"] = (temp["Time"] / 3600) % 24
+
+        plt.figure(figsize=(10, 5))
+
+        sns.histplot(
+            data=temp,
+            x="Hour",
+            hue="Class",
+            bins=48,
+            multiple="stack"
         )
-    )
+
+        plt.title("Transaction Activity by Hour")
+        plt.xlabel("Hour of Day")
+        plt.ylabel("Transaction Count")
+        plt.tight_layout()
+
+        path = os.path.join(
+            ASSETS_DIR,
+            "transactions_by_hour.png"
+        )
+
+        plt.savefig(path, dpi=160)
+        plt.close()
+
+        eda_files["transactions_by_hour"] = path
+
+    # --------------------------------------------------------
+    # Correlation Heatmap
+    # --------------------------------------------------------
+
+    numeric_df = df.select_dtypes(include=np.number)
+
+    correlation = numeric_df.corr()
+
+    plt.figure(figsize=(13, 10))
 
     sns.heatmap(
-        corr2,
-        mask=mask,
-        cmap="RdBu_r",
+        correlation,
+        cmap="coolwarm",
         center=0,
-        vmin=-1,
-        vmax=1,
-        ax=ax,
-        linewidths=0.3,
-        annot=False,
-        square=True,
-        cbar_kws={
-            "shrink": 0.6
-        }
+        linewidths=0.1
     )
 
-    ax.set_title(
-        "Feature Correlation Heatmap",
-        fontsize=14,
-        fontweight="bold"
+    plt.title("Feature Correlation Heatmap")
+    plt.tight_layout()
+
+    path = os.path.join(
+        ASSETS_DIR,
+        "correlation_heatmap.png"
     )
 
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eda_correlation_heatmap.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
+    plt.savefig(path, dpi=160)
+    plt.close()
+
+    eda_files["correlation_heatmap"] = path
+
+    # --------------------------------------------------------
+    # Fraud Percentage
+    # --------------------------------------------------------
+
+    fraud_rate = (
+        df["Class"].mean() * 100
+        if "Class" in df.columns
+        else 0
     )
 
-    plt.close(fig)
+    plt.figure(figsize=(7, 5))
 
-    print(
-        "      EDA charts saved to %s/"
-        % ASSETS_DIR
+    labels = ["Legitimate", "Fraud"]
+    values = [
+        100 - fraud_rate,
+        fraud_rate
+    ]
+
+    plt.bar(
+        labels,
+        values
     )
 
+    plt.title("Legitimate vs Fraud Percentage")
+    plt.ylabel("Percentage")
+    plt.tight_layout()
 
-# =============================================================================
-# SECTION 3 - MODEL TRAINING
-# =============================================================================
+    path = os.path.join(
+        ASSETS_DIR,
+        "fraud_percentage.png"
+    )
 
-def train_models(
-    X_tr_bal,
-    y_tr_bal,
-    X_tr_orig,
-    y_tr_orig
-):
-    """Train all five models."""
+    plt.savefig(path, dpi=160)
+    plt.close()
 
-    print("[7/7] Training models ...")
+    eda_files["fraud_percentage"] = path
+
+    return eda_files
+
+
+# ============================================================
+# MODEL DEFINITIONS
+# ============================================================
+
+def build_models(y_train_resampled):
 
     models = {}
 
-    # -------------------------------------------------------------------------
-    # LOGISTIC REGRESSION
-    # -------------------------------------------------------------------------
-
-    t0 = time.time()
-
-    print(
-        "      [1/5] Logistic Regression ..."
-    )
-
-    lr = LogisticRegression(
-        C=1.0,
+    models["Logistic Regression"] = LogisticRegression(
         max_iter=1000,
-        solver="lbfgs",
-        class_weight="balanced",
         random_state=RANDOM_STATE
     )
 
-    lr.fit(
-        X_tr_bal,
-        y_tr_bal
-    )
-
-    models[
-        "Logistic Regression"
-    ] = lr
-
-    print(
-        "            done %.1fs"
-        % (time.time() - t0)
-    )
-
-    # -------------------------------------------------------------------------
-    # RANDOM FOREST
-    # -------------------------------------------------------------------------
-
-    t0 = time.time()
-
-    print(
-        "      [2/5] Random Forest ..."
-    )
-
-    rf = RandomForestClassifier(
-        n_estimators=200,
-        min_samples_split=5,
-        min_samples_leaf=2,
-        class_weight="balanced",
+    models["Random Forest"] = RandomForestClassifier(
+        n_estimators=300,
         random_state=RANDOM_STATE,
+        n_jobs=-1,
+        class_weight=None,
+        max_depth=None
+    )
+
+    models["XGBoost"] = XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.9,
+        colsample_bytree=0.9,
+        random_state=RANDOM_STATE,
+        eval_metric="logloss",
         n_jobs=-1
     )
 
-    rf.fit(
-        X_tr_bal,
-        y_tr_bal
-    )
-
-    models[
-        "Random Forest"
-    ] = rf
-
-    print(
-        "            done %.1fs"
-        % (time.time() - t0)
-    )
-
-    # -------------------------------------------------------------------------
-    # XGBOOST
-    # -------------------------------------------------------------------------
-
-    t0 = time.time()
-
-    print(
-        "      [3/5] XGBoost ..."
-    )
-
-    neg = int(
-        (y_tr_bal == 0).sum()
-    )
-
-    pos = int(
-        (y_tr_bal == 1).sum()
-    )
-
-    xgb_model = xgb.XGBClassifier(
+    models["LightGBM"] = LGBMClassifier(
         n_estimators=300,
-        max_depth=6,
         learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        scale_pos_weight=(
-            neg / pos
-            if pos
-            else 1.0
-        ),
-        eval_metric="logloss",
+        num_leaves=31,
         random_state=RANDOM_STATE,
-        n_jobs=-1,
-        verbosity=0
+        verbosity=-1,
+        n_jobs=-1
     )
 
-    xgb_model.fit(
-        X_tr_bal,
-        y_tr_bal
-    )
-
-    models[
-        "XGBoost"
-    ] = xgb_model
-
-    print(
-        "            done %.1fs"
-        % (time.time() - t0)
-    )
-
-    # -------------------------------------------------------------------------
-    # LIGHTGBM
-    # -------------------------------------------------------------------------
-
-    t0 = time.time()
-
-    print(
-        "      [4/5] LightGBM ..."
-    )
-
-    lgb_model = lgb.LGBMClassifier(
+    models["Isolation Forest"] = IsolationForest(
         n_estimators=300,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        scale_pos_weight=(
-            neg / pos
-            if pos
-            else 1.0
-        ),
-        random_state=RANDOM_STATE,
-        n_jobs=-1,
-        verbose=-1
-    )
-
-    lgb_model.fit(
-        X_tr_bal,
-        y_tr_bal
-    )
-
-    models[
-        "LightGBM"
-    ] = lgb_model
-
-    print(
-        "            done %.1fs"
-        % (time.time() - t0)
-    )
-
-    # -------------------------------------------------------------------------
-    # ISOLATION FOREST
-    # -------------------------------------------------------------------------
-
-    t0 = time.time()
-
-    print(
-        "      [5/5] Isolation Forest ..."
-    )
-
-    iso = IsolationForest(
-        n_estimators=200,
         contamination=0.002,
         random_state=RANDOM_STATE,
         n_jobs=-1
     )
 
-    iso.fit(
-        X_tr_orig
-    )
+    return models
 
-    models[
-        "Isolation Forest"
-    ] = iso
 
-    print(
-        "            done %.1fs"
-        % (time.time() - t0)
-    )
+# ============================================================
+# MODEL TRAINING
+# ============================================================
 
-    # -------------------------------------------------------------------------
-    # SAVE MODELS
-    # -------------------------------------------------------------------------
+def train_models(
+    X_train_scaled,
+    y_train,
+    X_train_resampled,
+    y_train_resampled
+):
+
+    models = build_models(y_train_resampled)
+
+    trained_models = {}
 
     for name, model in models.items():
 
-        safe_name = (
-            name
-            .lower()
+        if name == "Isolation Forest":
+
+            model.fit(X_train_scaled)
+
+        else:
+
+            model.fit(
+                X_train_resampled,
+                y_train_resampled
+            )
+
+        trained_models[name] = model
+
+        filename = (
+            name.lower()
             .replace(" ", "_")
+            .replace("-", "_")
+            + ".joblib"
         )
 
         joblib.dump(
             model,
-            os.path.join(
-                MODELS_DIR,
-                "%s.joblib" % safe_name
-            )
+            os.path.join(MODELS_DIR, filename)
         )
 
-    return models
+    return trained_models
 
 
-# =============================================================================
-# SECTION 4 - MODEL EVALUATION
-# =============================================================================
+# ============================================================
+# MODEL PREDICTIONS
+# ============================================================
 
-def evaluate_models(
-    models,
-    X_te,
-    y_te
-):
-    """Evaluate all trained models."""
+def get_prediction_scores(model, X):
 
-    all_results = []
+    if isinstance(model, IsolationForest):
 
-    for name, model in models.items():
+        raw_predictions = model.decision_function(X)
 
-        is_iso = (
-            name == "Isolation Forest"
-        )
+        scores = -raw_predictions
 
-        if is_iso:
+        min_score = scores.min()
+        max_score = scores.max()
 
-            raw = model.predict(
-                X_te
-            )
-
-            y_pred = np.where(
-                raw == -1,
-                1,
-                0
-            )
-
-            scores = -model.decision_function(
-                X_te
-            )
-
-            y_prob = (
-                scores - scores.min()
-            ) / (
-                scores.max()
-                - scores.min()
-                + 1e-9
-            )
+        if max_score - min_score == 0:
+            probabilities = np.zeros_like(scores)
 
         else:
-
-            y_pred = model.predict(
-                X_te
+            probabilities = (
+                (scores - min_score)
+                / (max_score - min_score)
             )
 
-            y_prob = model.predict_proba(
-                X_te
-            )[:, 1]
+        predictions = (
+            model.predict(X) == -1
+        ).astype(int)
+
+        return predictions, probabilities
+
+    if hasattr(model, "predict_proba"):
+
+        probabilities = model.predict_proba(X)[:, 1]
+
+        predictions = (
+            probabilities >= 0.5
+        ).astype(int)
+
+        return predictions, probabilities
+
+    predictions = model.predict(X)
+
+    return predictions, predictions.astype(float)
+
+
+# ============================================================
+# MODEL EVALUATION
+# ============================================================
+
+def evaluate_models(
+    trained_models,
+    X_test_scaled,
+    y_test
+):
+
+    results = {}
+
+    for name, model in trained_models.items():
+
+        predictions, probabilities = get_prediction_scores(
+            model,
+            X_test_scaled
+        )
+
+        precision = precision_score(
+            y_test,
+            predictions,
+            zero_division=0
+        )
+
+        recall = recall_score(
+            y_test,
+            predictions,
+            zero_division=0
+        )
+
+        f1 = f1_score(
+            y_test,
+            predictions,
+            zero_division=0
+        )
+
+        try:
+            roc_auc = roc_auc_score(
+                y_test,
+                probabilities
+            )
+        except Exception:
+            roc_auc = 0.0
+
+        try:
+            pr_auc = average_precision_score(
+                y_test,
+                probabilities
+            )
+        except Exception:
+            pr_auc = 0.0
 
         cm = confusion_matrix(
-            y_te,
-            y_pred
+            y_test,
+            predictions
         )
 
-        result = {
-            "model_name": name,
-
-            "precision": round(
-                float(
-                    precision_score(
-                        y_te,
-                        y_pred,
-                        zero_division=0
-                    )
-                ),
-                4
-            ),
-
-            "recall": round(
-                float(
-                    recall_score(
-                        y_te,
-                        y_pred,
-                        zero_division=0
-                    )
-                ),
-                4
-            ),
-
-            "f1": round(
-                float(
-                    f1_score(
-                        y_te,
-                        y_pred,
-                        zero_division=0
-                    )
-                ),
-                4
-            ),
-
-            "roc_auc": round(
-                float(
-                    roc_auc_score(
-                        y_te,
-                        y_prob
-                    )
-                ),
-                4
-            ),
-
-            "pr_auc": round(
-                float(
-                    average_precision_score(
-                        y_te,
-                        y_prob
-                    )
-                ),
-                4
-            ),
-
-            "confusion_matrix":
-                cm.tolist(),
-
-            "y_prob":
-                y_prob.tolist()
+        results[name] = {
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+            "roc_auc": float(roc_auc),
+            "pr_auc": float(pr_auc),
+            "confusion_matrix": cm.tolist()
         }
 
-        all_results.append(
-            result
-        )
-
-        print(
-            "  %-22s F1=%.4f ROC-AUC=%.4f PR-AUC=%.4f"
-            % (
-                name,
-                result["f1"],
-                result["roc_auc"],
-                result["pr_auc"]
-            )
-        )
-
-    return all_results
-
-
-def generate_eval_charts(
-    all_results,
-    y_te
-):
-    """Generate model evaluation charts."""
-
-    colors = [
-        "#2563EB",
-        "#16A34A",
-        "#F59E0B",
-        "#7C3AED",
-        "#DC2626"
-    ]
-
-    y_arr = np.array(
-        y_te
-    )
-
-    # -------------------------------------------------------------------------
-    # ROC CURVES
-    # -------------------------------------------------------------------------
-
-    fig, ax = plt.subplots(
-        figsize=(9, 7)
-    )
-
-    for result, color in zip(
-        all_results,
-        colors
-    ):
-
-        fpr, tpr, _ = roc_curve(
-            y_arr,
-            np.array(
-                result["y_prob"]
-            )
-        )
-
-        ax.plot(
-            fpr,
-            tpr,
-            label="%s (%.4f)"
-            % (
-                result["model_name"],
-                result["roc_auc"]
-            ),
-            color=color,
-            lw=2
-        )
-
-    ax.plot(
-        [0, 1],
-        [0, 1],
-        "k--",
-        lw=1,
-        label="Random"
-    )
-
-    ax.set_xlabel(
-        "False Positive Rate"
-    )
-
-    ax.set_ylabel(
-        "True Positive Rate"
-    )
-
-    ax.set_title(
-        "ROC Curves",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    ax.legend(
-        loc="lower right"
-    )
-
-    ax.grid(
-        True,
-        alpha=0.4
-    )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eval_roc_curves.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # PRECISION-RECALL CURVES
-    # -------------------------------------------------------------------------
-
-    baseline = y_arr.mean()
-
-    fig, ax = plt.subplots(
-        figsize=(9, 7)
-    )
-
-    for result, color in zip(
-        all_results,
-        colors
-    ):
-
-        precision, recall, _ = (
-            precision_recall_curve(
-                y_arr,
-                np.array(
-                    result["y_prob"]
-                )
-            )
-        )
-
-        ax.plot(
-            recall,
-            precision,
-            label="%s (%.4f)"
-            % (
-                result["model_name"],
-                result["pr_auc"]
-            ),
-            color=color,
-            lw=2
-        )
-
-    ax.axhline(
-        baseline,
-        color="k",
-        linestyle="--",
-        lw=1,
-        label="Baseline"
-    )
-
-    ax.set_xlabel(
-        "Recall"
-    )
-
-    ax.set_ylabel(
-        "Precision"
-    )
-
-    ax.set_title(
-        "Precision-Recall Curves",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    ax.legend(
-        loc="upper right"
-    )
-
-    ax.grid(
-        True,
-        alpha=0.4
-    )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eval_pr_curves.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # CONFUSION MATRICES
-    # -------------------------------------------------------------------------
-
-    n = len(
-        all_results
-    )
-
-    fig, axes = plt.subplots(
-        2,
-        3,
-        figsize=(15, 10)
-    )
-
-    axes = axes.flatten()
-
-    for ax, result in zip(
-        axes,
-        all_results
-    ):
-
-        cm = np.array(
-            result["confusion_matrix"]
-        )
-
-        ax.imshow(
-            cm,
-            cmap="Blues"
-        )
-
-        ax.set_title(
-            result["model_name"],
-            fontsize=11,
-            fontweight="bold"
-        )
-
-        ax.set_xticks(
-            [0, 1]
-        )
-
-        ax.set_yticks(
-            [0, 1]
-        )
-
-        ax.set_xticklabels(
-            ["Legit", "Fraud"]
-        )
-
-        ax.set_yticklabels(
-            ["Legit", "Fraud"]
-        )
-
-        ax.set_xlabel(
-            "Predicted"
-        )
-
-        ax.set_ylabel(
-            "Actual"
-        )
-
-        for i in range(2):
-
-            for j in range(2):
-
-                ax.text(
-                    j,
-                    i,
-                    str(cm[i, j]),
-                    ha="center",
-                    va="center",
-                    fontsize=12,
-                    color=(
-                        "white"
-                        if cm[i, j]
-                        > cm.max() / 2
-                        else "black"
-                    )
-                )
-
-    for ax in axes[n:]:
-        ax.axis("off")
-
-    plt.tight_layout()
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eval_confusion_matrices.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # METRICS COMPARISON
-    # -------------------------------------------------------------------------
-
-    metrics = [
-        "precision",
-        "recall",
-        "f1",
-        "roc_auc",
-        "pr_auc"
-    ]
-
-    x = np.arange(
-        len(metrics)
-    )
-
-    width = 0.15
-
-    offsets = (
-        np.linspace(
-            -(len(all_results) - 1) / 2,
-            (len(all_results) - 1) / 2,
-            len(all_results)
-        )
-        * width
-    )
-
-    fig, ax = plt.subplots(
-        figsize=(13, 6)
-    )
-
-    for result, offset, color in zip(
-        all_results,
-        offsets,
-        colors
-    ):
-
-        ax.bar(
-            x + offset,
-            [
-                result[m]
-                for m in metrics
-            ],
-            width,
-            label=result["model_name"],
-            color=color,
-            alpha=0.85
-        )
-
-    ax.set_xticks(
-        x
-    )
-
-    ax.set_xticklabels(
-        [
-            "Precision",
-            "Recall",
-            "F1",
-            "ROC-AUC",
-            "PR-AUC"
-        ]
-    )
-
-    ax.set_ylim(
-        0,
-        1.1
-    )
-
-    ax.set_ylabel(
-        "Score"
-    )
-
-    ax.set_title(
-        "Model Performance Comparison",
-        fontsize=14,
-        fontweight="bold"
-    )
-
-    ax.legend(
-        loc="lower right"
-    )
-
-    ax.grid(
-        True,
-        axis="y",
-        alpha=0.4
-    )
-
-    fig.savefig(
-        os.path.join(
-            ASSETS_DIR,
-            "eval_metrics_comparison.png"
-        ),
-        dpi=150,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-
-# =============================================================================
-# SECTION 5 - INFERENCE
-# =============================================================================
-
-MODEL_FILES = {
-    "Logistic Regression":
-        "logistic_regression.joblib",
-
-    "Random Forest":
-        "random_forest.joblib",
-
-    "XGBoost":
-        "xgboost.joblib",
-
-    "LightGBM":
-        "lightgbm.joblib",
-
-    "Isolation Forest":
-        "isolation_forest.joblib",
-}
-
-SUPERVISED = {
-    "Logistic Regression",
-    "Random Forest",
-    "XGBoost",
-    "LightGBM"
-}
-
-
-def get_risk_level(probability):
-
-    if probability < 0.30:
-        return "LOW RISK", "#16A34A"
-
-    if probability < 0.60:
-        return "MEDIUM RISK", "#D97706"
-
-    if probability < 0.80:
-        return "HIGH RISK", "#EA580C"
-
-    return "CRITICAL RISK", "#DC2626"
-
-
-def _load_inference_artifacts(
-    model_name
-):
-
-    scaler = joblib.load(
-        os.path.join(
-            MODELS_DIR,
-            "scaler.joblib"
-        )
-    )
-
-    feature_cols = joblib.load(
-        os.path.join(
-            MODELS_DIR,
-            "feature_cols.joblib"
-        )
-    )
-
-    model = joblib.load(
-        os.path.join(
-            MODELS_DIR,
-            MODEL_FILES[model_name]
-        )
-    )
-
-    return (
-        scaler,
-        feature_cols,
-        model
-    )
-
-
-def predict_single(
-    model_name,
-    time_val,
-    v_features,
-    amount
-):
-    """Predict one transaction."""
-
-    scaler, feature_cols, model = (
-        _load_inference_artifacts(
-            model_name
-        )
-    )
-
-    amount_log = np.log1p(
-        amount
-    )
-
-    hour = (
-        time_val // 3600
-    ) % 24
-
-    feature_dict = {
-        "V%d" % i:
-        v_features[i - 1]
-        for i in range(1, 29)
-    }
-
-    feature_dict[
-        "Amount_log"
-    ] = amount_log
-
-    feature_dict[
-        "Hour"
-    ] = hour
-
-    raw = np.array([
-        feature_dict[c]
-        for c in feature_cols
-    ]).reshape(
-        1,
-        -1
-    )
-
-    with warnings.catch_warnings():
-
-        warnings.simplefilter(
-            "ignore"
-        )
-
-        scaled = scaler.transform(
-            raw
-        )
-
-    if model_name in SUPERVISED:
-
-        probability = float(
-            model.predict_proba(
-                scaled
-            )[0, 1]
-        )
-
-        prediction = int(
-            model.predict(
-                scaled
-            )[0]
-        )
-
-    else:
-
-        score = float(
-            -model.decision_function(
-                scaled
-            )[0]
-        )
-
-        probability = float(
-            np.clip(
-                score,
-                0,
-                1
-            )
-        )
-
-        prediction = (
-            1
-            if model.predict(
-                scaled
-            )[0] == -1
-            else 0
-        )
-
-    risk_level, risk_color = (
-        get_risk_level(
-            probability
-        )
-    )
-
-    return {
-        "probability": probability,
-        "risk_level": risk_level,
-        "risk_color": risk_color,
-        "prediction": prediction
-    }
-
-
-def predict_batch_df(
-    model_name,
-    df_in
-):
-    """Predict fraud risk for a complete dataframe."""
-
-    scaler, feature_cols, model = (
-        _load_inference_artifacts(
-            model_name
-        )
-    )
-
-    df = df_in.copy()
-
-    df["Amount_log"] = np.log1p(
-        df["Amount"]
-    )
-
-    df["Hour"] = (
-        df["Time"] // 3600
-    ) % 24
-
-    missing = [
-        c
-        for c in feature_cols
-        if c not in df.columns
-    ]
-
-    if missing:
-        raise ValueError(
-            "Missing columns: %s"
-            % str(missing)
-        )
-
-    X = df[
-        feature_cols
-    ].values
-
-    with warnings.catch_warnings():
-
-        warnings.simplefilter(
-            "ignore"
-        )
-
-        X_scaled = scaler.transform(
-            X
-        )
-
-    if model_name in SUPERVISED:
-
-        probabilities = (
-            model.predict_proba(
-                X_scaled
-            )[:, 1]
-        )
-
-        predictions = model.predict(
-            X_scaled
-        )
-
-    else:
-
-        scores = (
-            -model.decision_function(
-                X_scaled
-            )
-        )
-
-        probabilities = np.clip(
-            scores,
-            0,
-            1
-        )
-
-        predictions = np.where(
-            model.predict(
-                X_scaled
-            ) == -1,
-            1,
-            0
-        )
-
-    df[
-        "fraud_probability"
-    ] = np.round(
-        probabilities,
-        4
-    )
-
-    df[
-        "prediction"
-    ] = predictions
-
-    df[
-        "risk_level"
-    ] = df[
-        "fraud_probability"
-    ].apply(
-        lambda p:
-        get_risk_level(p)[0]
-    )
-
-    return df
-
-
-def list_trained_models():
-
-    return [
-        name
-        for name, filename
-        in MODEL_FILES.items()
-        if os.path.exists(
-            os.path.join(
-                MODELS_DIR,
-                filename
-            )
-        )
-    ]
-
-
-def models_ready():
-
-    required = [
-        "scaler.joblib",
-        "feature_cols.joblib",
-        "random_forest.joblib"
-    ]
-
-    return all(
-        os.path.exists(
-            os.path.join(
-                MODELS_DIR,
-                filename
-            )
-        )
-        for filename in required
-    )
-
-
-# =============================================================================
-# SECTION 6 - TRAINING PIPELINE
-# =============================================================================
-
-def run_training_pipeline():
-
-    total_start = time.time()
-
-    print("=" * 65)
-    print(
-        "  AI FINANCIAL FRAUD DETECTION"
-    )
-    print(
-        "  Machine Learning Training Pipeline"
-    )
-    print("=" * 65)
-
-    df = load_and_clean()
-
-    df = feature_engineer(
-        df
-    )
-
-    generate_eda(
-        df
-    )
-
-    (
-        X_tr_bal,
-        y_tr_bal,
-        X_te,
-        y_te,
-        X_tr_orig,
-        y_tr_orig,
-        feature_cols,
-        scaler
-    ) = split_and_scale(
-        df
-    )
-
-    models = train_models(
-        X_tr_bal,
-        y_tr_bal,
-        X_tr_orig,
-        y_tr_orig
-    )
-
-    print(
-        "\nEvaluating models on test set ..."
-    )
-
-    all_results = evaluate_models(
-        models,
-        X_te,
-        y_te
-    )
-
-    generate_eval_charts(
-        all_results,
-        y_te
-    )
-
-    best = max(
-        all_results,
-        key=lambda result:
-        result["f1"]
-    )
-
-    # -------------------------------------------------------------------------
-    # DATASET STATISTICS
-    # -------------------------------------------------------------------------
-
-    stats = {
-
-        "total_rows":
-            int(len(df)),
-
-        "fraud_count":
-            int(df["Class"].sum()),
-
-        "legit_count":
-            int(
-                (df["Class"] == 0)
-                .sum()
-            ),
-
-        "fraud_pct":
-            float(
-                100
-                * df["Class"].sum()
-                / len(df)
-            ),
-
-        "legit_pct":
-            float(
-                100
-                * (
-                    df["Class"] == 0
-                ).sum()
-                / len(df)
-            ),
-
-        "mean_amount":
-            float(
-                df["Amount"].mean()
-            ),
-
-        "mean_amount_fraud":
-            float(
-                df.loc[
-                    df["Class"] == 1,
-                    "Amount"
-                ].mean()
-            ),
-
-        "mean_amount_legit":
-            float(
-                df.loc[
-                    df["Class"] == 0,
-                    "Amount"
-                ].mean()
-            ),
-
-        "max_amount":
-            float(
-                df["Amount"].max()
-            ),
-
-        "best_model":
-            best["model_name"]
-    }
-
     joblib.dump(
-        stats,
-        os.path.join(
-            MODELS_DIR,
-            "dataset_stats.joblib"
-        )
-    )
-
-    joblib.dump(
-        all_results,
+        results,
         os.path.join(
             MODELS_DIR,
             "eval_results.joblib"
@@ -1935,555 +580,1105 @@ def run_training_pipeline():
             "eval_summary.json"
         ),
         "w"
-    ) as file:
+    ) as f:
 
         json.dump(
-            [
-                {
-                    key: value
-                    for key, value
-                    in result.items()
-                    if key != "y_prob"
-                }
-                for result in all_results
-            ],
-            file,
-            indent=2
+            results,
+            f,
+            indent=4
         )
 
-    elapsed = (
-        time.time()
-        - total_start
-    ) / 60
+    return results
 
-    print("\n" + "=" * 65)
+
+# ============================================================
+# EVALUATION VISUALIZATIONS
+# ============================================================
+
+def generate_evaluation_charts(
+    trained_models,
+    X_test_scaled,
+    y_test,
+    results
+):
+
+    # --------------------------------------------------------
+    # ROC CURVE
+    # --------------------------------------------------------
+
+    plt.figure(figsize=(9, 6))
+
+    for name, model in trained_models.items():
+
+        _, probabilities = get_prediction_scores(
+            model,
+            X_test_scaled
+        )
+
+        fpr, tpr, _ = roc_curve(
+            y_test,
+            probabilities
+        )
+
+        auc = roc_auc_score(
+            y_test,
+            probabilities
+        )
+
+        plt.plot(
+            fpr,
+            tpr,
+            label=f"{name} (AUC={auc:.3f})"
+        )
+
+    plt.plot(
+        [0, 1],
+        [0, 1],
+        linestyle="--"
+    )
+
+    plt.title("ROC-AUC Comparison")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join(
+            ASSETS_DIR,
+            "roc_curves.png"
+        ),
+        dpi=160
+    )
+
+    plt.close()
+
+    # --------------------------------------------------------
+    # PRECISION RECALL CURVE
+    # --------------------------------------------------------
+
+    plt.figure(figsize=(9, 6))
+
+    for name, model in trained_models.items():
+
+        _, probabilities = get_prediction_scores(
+            model,
+            X_test_scaled
+        )
+
+        precision, recall, _ = precision_recall_curve(
+            y_test,
+            probabilities
+        )
+
+        ap = average_precision_score(
+            y_test,
+            probabilities
+        )
+
+        plt.plot(
+            recall,
+            precision,
+            label=f"{name} (AP={ap:.3f})"
+        )
+
+    plt.title("Precision-Recall Curves")
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join(
+            ASSETS_DIR,
+            "precision_recall_curves.png"
+        ),
+        dpi=160
+    )
+
+    plt.close()
+
+    # --------------------------------------------------------
+    # MODEL METRICS
+    # --------------------------------------------------------
+
+    metric_df = pd.DataFrame(
+        results
+    ).T
+
+    metrics_to_plot = [
+        "precision",
+        "recall",
+        "f1",
+        "roc_auc",
+        "pr_auc"
+    ]
+
+    metric_df[metrics_to_plot].plot(
+        kind="bar",
+        figsize=(12, 7)
+    )
+
+    plt.title("Model Performance Comparison")
+    plt.xlabel("Model")
+    plt.ylabel("Score")
+    plt.xticks(rotation=35)
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join(
+            ASSETS_DIR,
+            "model_metrics.png"
+        ),
+        dpi=160
+    )
+
+    plt.close()
+
+    # --------------------------------------------------------
+    # CONFUSION MATRICES
+    # --------------------------------------------------------
+
+    for name, model_results in results.items():
+
+        cm = np.array(
+            model_results["confusion_matrix"]
+        )
+
+        plt.figure(figsize=(6, 5))
+
+        sns.heatmap(
+            cm,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            cbar=False
+        )
+
+        plt.title(
+            f"{name} - Confusion Matrix"
+        )
+
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+        plt.tight_layout()
+
+        filename = (
+            name.lower()
+            .replace(" ", "_")
+            .replace("-", "_")
+            + "_confusion_matrix.png"
+        )
+
+        plt.savefig(
+            os.path.join(
+                ASSETS_DIR,
+                filename
+            ),
+            dpi=160
+        )
+
+        plt.close()
+
+
+# ============================================================
+# TRAINING PIPELINE
+# ============================================================
+
+def run_training_pipeline():
+
+    print("=" * 70)
+    print("AI-POWERED FINANCIAL FRAUD DETECTION")
+    print("=" * 70)
+
+    ensure_directories()
+
+    print("\n[1/7] Loading dataset...")
+
+    df = load_dataset()
 
     print(
-        "  Training complete in %.1f minutes"
-        % elapsed
+        f"Original dataset shape: {df.shape}"
+    )
+
+    print("\n[2/7] Cleaning dataset...")
+
+    df, duplicate_count = clean_dataset(df)
+
+    print(
+        f"Duplicate rows removed: {duplicate_count}"
     )
 
     print(
-        "  Best model by F1: %s = %.4f"
-        % (
-            best["model_name"],
-            best["f1"]
+        f"Clean dataset shape: {df.shape}"
+    )
+
+    stats = {
+        "original_rows": int(df.shape[0] + duplicate_count),
+        "clean_rows": int(df.shape[0]),
+        "columns": int(df.shape[1]),
+        "fraud_count": int(df["Class"].sum()),
+        "legitimate_count": int((df["Class"] == 0).sum()),
+        "fraud_rate": float(df["Class"].mean() * 100),
+        "duplicate_count": int(duplicate_count)
+    }
+
+    joblib.dump(
+        stats,
+        os.path.join(
+            MODELS_DIR,
+            "dataset_stats.joblib"
         )
     )
 
+    print("\n[3/7] Generating EDA...")
+
+    generate_eda(df)
+
+    print("\n[4/7] Preparing train/test data...")
+
+    (
+        X_train_scaled,
+        X_test_scaled,
+        y_train,
+        y_test,
+        X_train_resampled,
+        y_train_resampled,
+        feature_columns,
+        scaler
+    ) = prepare_data(df)
+
     print(
-        "  Launch:"
+        f"Training rows before SMOTE: {len(y_train)}"
     )
 
     print(
-        "  streamlit run "
-        "SalapareddiLaxmana_FinancialFraudDetection.py"
+        f"Training rows after SMOTE: {len(y_train_resampled)}"
     )
 
-    print("=" * 65)
+    print("\n[5/7] Training models...")
+
+    trained_models = train_models(
+        X_train_scaled,
+        y_train,
+        X_train_resampled,
+        y_train_resampled
+    )
+
+    print("\n[6/7] Evaluating models...")
+
+    results = evaluate_models(
+        trained_models,
+        X_test_scaled,
+        y_test
+    )
+
+    print("\nModel Results:")
+
+    for name, result in results.items():
+
+        print(
+            f"{name}: "
+            f"Precision={result['precision']:.4f}, "
+            f"Recall={result['recall']:.4f}, "
+            f"F1={result['f1']:.4f}, "
+            f"ROC-AUC={result['roc_auc']:.4f}, "
+            f"PR-AUC={result['pr_auc']:.4f}"
+        )
+
+    print("\n[7/7] Generating evaluation charts...")
+
+    generate_evaluation_charts(
+        trained_models,
+        X_test_scaled,
+        y_test,
+        results
+    )
+
+    print("\nTraining completed successfully.")
+
+    return results
 
 
-# =============================================================================
-# SECTION 7 - STREAMLIT APPLICATION
-# =============================================================================
+# ============================================================
+# LOAD SAVED ARTIFACTS
+# ============================================================
+
+def load_saved_results():
+
+    path = os.path.join(
+        MODELS_DIR,
+        "eval_results.joblib"
+    )
+
+    if not os.path.exists(path):
+        return None
+
+    return joblib.load(path)
+
+
+def load_saved_stats():
+
+    path = os.path.join(
+        MODELS_DIR,
+        "dataset_stats.joblib"
+    )
+
+    if not os.path.exists(path):
+        return None
+
+    return joblib.load(path)
+
+
+def load_saved_model(model_name):
+
+    filename = (
+        model_name.lower()
+        .replace(" ", "_")
+        .replace("-", "_")
+        + ".joblib"
+    )
+
+    path = os.path.join(
+        MODELS_DIR,
+        filename
+    )
+
+    if not os.path.exists(path):
+        return None
+
+    return joblib.load(path)
+
+
+def load_saved_scaler():
+
+    path = os.path.join(
+        MODELS_DIR,
+        "scaler.joblib"
+    )
+
+    if not os.path.exists(path):
+        return None
+
+    return joblib.load(path)
+
+
+def load_feature_columns():
+
+    path = os.path.join(
+        MODELS_DIR,
+        "feature_columns.joblib"
+    )
+
+    if not os.path.exists(path):
+        return None
+
+    return joblib.load(path)
+
+
+# ============================================================
+# RISK CLASSIFICATION
+# ============================================================
+
+def risk_level(probability):
+
+    if probability < 0.30:
+        return "LOW RISK"
+
+    elif probability < 0.60:
+        return "MEDIUM RISK"
+
+    elif probability < 0.80:
+        return "HIGH RISK"
+
+    else:
+        return "CRITICAL RISK"
+
+
+def risk_description(level):
+
+    descriptions = {
+
+        "LOW RISK":
+            "The transaction has a relatively low predicted fraud probability.",
+
+        "MEDIUM RISK":
+            "The transaction requires additional monitoring.",
+
+        "HIGH RISK":
+            "The transaction shows elevated fraud risk and may require review.",
+
+        "CRITICAL RISK":
+            "The transaction has a very high predicted fraud probability and should be investigated."
+    }
+
+    return descriptions.get(
+        level,
+        "Risk level unavailable."
+    )
+
+
+# ============================================================
+# SINGLE TRANSACTION PREDICTION
+# ============================================================
+
+def predict_transaction(
+    input_data,
+    model_name="Random Forest"
+):
+
+    scaler = load_saved_scaler()
+    feature_columns = load_feature_columns()
+    model = load_saved_model(model_name)
+
+    if scaler is None:
+        raise FileNotFoundError(
+            "Scaler not found. Train the models first."
+        )
+
+    if feature_columns is None:
+        raise FileNotFoundError(
+            "Feature columns not found. Train the models first."
+        )
+
+    if model is None:
+        raise FileNotFoundError(
+            f"Model not found: {model_name}"
+        )
+
+    input_df = pd.DataFrame(
+        [input_data]
+    )
+
+    input_df = feature_engineering(
+        input_df
+    )
+
+    for column in feature_columns:
+
+        if column not in input_df.columns:
+            input_df[column] = 0
+
+    input_df = input_df[
+        feature_columns
+    ]
+
+    X_scaled = scaler.transform(
+        input_df
+    )
+
+    predictions, probabilities = get_prediction_scores(
+        model,
+        X_scaled
+    )
+
+    probability = float(
+        probabilities[0]
+    )
+
+    prediction = int(
+        predictions[0]
+    )
+
+    return {
+        "prediction": prediction,
+        "probability": probability,
+        "risk_level": risk_level(probability),
+        "description": risk_description(
+            risk_level(probability)
+        )
+    }
+
+
+# ============================================================
+# BATCH PREDICTION
+# ============================================================
+
+def batch_predict(
+    df,
+    model_name="Random Forest"
+):
+
+    scaler = load_saved_scaler()
+    feature_columns = load_feature_columns()
+    model = load_saved_model(model_name)
+
+    if scaler is None:
+        raise FileNotFoundError(
+            "Scaler not found."
+        )
+
+    if feature_columns is None:
+        raise FileNotFoundError(
+            "Feature columns not found."
+        )
+
+    if model is None:
+        raise FileNotFoundError(
+            f"Model not found: {model_name}"
+        )
+
+    work_df = df.copy()
+
+    work_df = feature_engineering(
+        work_df
+    )
+
+    for column in feature_columns:
+
+        if column not in work_df.columns:
+            work_df[column] = 0
+
+    X = work_df[
+        feature_columns
+    ]
+
+    X_scaled = scaler.transform(
+        X
+    )
+
+    predictions, probabilities = get_prediction_scores(
+        model,
+        X_scaled
+    )
+
+    output = df.copy()
+
+    output["Fraud_Prediction"] = predictions
+
+    output["Fraud_Probability"] = probabilities
+
+    output["Risk_Level"] = [
+        risk_level(p)
+        for p in probabilities
+    ]
+
+    return output
+
+
+# ============================================================
+# STREAMLIT APPLICATION
+# ============================================================
 
 def run_streamlit_app():
 
     import streamlit as st
-    import plotly.graph_objects as go
-    import plotly.express as px
-    from PIL import Image
 
-    # -------------------------------------------------------------------------
-    # PAGE CONFIG
-    # -------------------------------------------------------------------------
+    try:
+        import plotly.express as px
+        import plotly.graph_objects as go
+    except Exception:
+        px = None
+        go = None
 
     st.set_page_config(
         page_title="AI Financial Fraud Detection",
-        page_icon="🛡️",
+        page_icon="💳",
         layout="wide",
         initial_sidebar_state="expanded"
     )
 
-    # -------------------------------------------------------------------------
-    # PROFESSIONAL UI
-    # -------------------------------------------------------------------------
+    # ========================================================
+    # PROFESSIONAL DARK UI
+    # ========================================================
 
     st.markdown(
         """
         <style>
 
-        /* ================================================================
-           GLOBAL PAGE
-           ================================================================ */
+        /* ====================================================
+           GLOBAL BACKGROUND
+        ==================================================== */
 
-        html,
-        body,
+        .stApp {
+            background:
+                radial-gradient(
+                    circle at top right,
+                    #123B5D 0%,
+                    #071A2B 35%,
+                    #020B14 100%
+                );
+            color: #FFFFFF;
+        }
+
         [data-testid="stAppViewContainer"] {
-            background: #F1F5F9 !important;
+            background:
+                linear-gradient(
+                    135deg,
+                    #020B14 0%,
+                    #071A2B 45%,
+                    #0A2238 100%
+                );
         }
 
         [data-testid="stHeader"] {
-            background: #F1F5F9 !important;
+            background: rgba(0, 0, 0, 0.35);
         }
 
-        .main {
-            background: #F1F5F9 !important;
+        /* ====================================================
+           SIDEBAR
+        ==================================================== */
+
+        [data-testid="stSidebar"] {
+            background:
+                linear-gradient(
+                    180deg,
+                    #020B14 0%,
+                    #041526 55%,
+                    #061D31 100%
+                );
+            border-right: 1px solid #164A70;
         }
 
-        .block-container {
-            max-width: 1500px !important;
-            padding-top: 2rem !important;
-            padding-bottom: 3rem !important;
-            padding-left: 3rem !important;
-            padding-right: 3rem !important;
+        [data-testid="stSidebar"] * {
+            color: #F8FAFC !important;
         }
 
-        /* ================================================================
-           NORMAL TEXT
-           ================================================================ */
+        [data-testid="stSidebar"] .stRadio label {
+            color: #FFFFFF !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+        }
 
-        p,
-        li,
-        label,
-        span,
-        div {
+        [data-testid="stSidebar"] .stRadio label:hover {
+            color: #38BDF8 !important;
+        }
+
+        /* ====================================================
+           GENERAL TEXT
+        ==================================================== */
+
+        html,
+        body,
+        [class*="css"] {
             font-family:
-                Inter,
                 "Segoe UI",
                 Arial,
                 sans-serif;
         }
 
-        p {
-            color: #334155;
-            font-size: 1rem;
+        p,
+        li,
+        span,
+        label {
+            color: #EAF6FF !important;
+        }
+
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li {
+            color: #EAF6FF !important;
+            font-size: 16px;
             line-height: 1.65;
         }
 
-        /* ================================================================
-           MAIN HEADINGS
-           ================================================================ */
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.2px;
+        }
 
         h1 {
-            color: #0F172A !important;
-            font-size: 2.25rem !important;
-            font-weight: 800 !important;
-            letter-spacing: -0.5px !important;
+            font-size: 42px !important;
         }
 
         h2 {
-            color: #0F172A !important;
-            font-size: 1.75rem !important;
-            font-weight: 800 !important;
+            font-size: 32px !important;
         }
 
         h3 {
-            color: #0F172A !important;
-            font-size: 1.35rem !important;
-            font-weight: 750 !important;
+            font-size: 24px !important;
         }
 
         h4 {
-            color: #1E293B !important;
-            font-size: 1.1rem !important;
-            font-weight: 700 !important;
+            font-size: 20px !important;
         }
 
-        /* ================================================================
-           SIDEBAR
-           ================================================================ */
+        /* ====================================================
+           MAIN TITLE
+        ==================================================== */
 
-        section[data-testid="stSidebar"] {
-            background:
-                linear-gradient(
-                    180deg,
-                    #0B1F33 0%,
-                    #102A43 100%
-                ) !important;
-
-            border-right:
-                1px solid #1E3A5F !important;
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: #E2E8F0 !important;
-        }
-
-        section[data-testid="stSidebar"] h1,
-        section[data-testid="stSidebar"] h2,
-        section[data-testid="stSidebar"] h3 {
+        .main-title {
+            font-size: 46px;
+            font-weight: 900;
             color: #FFFFFF !important;
+            margin-bottom: 4px;
+            line-height: 1.15;
         }
 
-        .sidebar-brand {
-            background: #143653;
-            border: 1px solid #285477;
-            border-radius: 16px;
-            padding: 18px;
-            margin-bottom: 18px;
+        .main-subtitle {
+            font-size: 18px;
+            color: #A7D8F7 !important;
+            margin-bottom: 25px;
         }
 
-        .sidebar-brand-title {
-            color: #FFFFFF !important;
-            font-size: 1.15rem;
-            font-weight: 800;
-            margin-bottom: 5px;
-        }
-
-        .sidebar-brand-subtitle {
-            color: #B8CCE0 !important;
-            font-size: 0.78rem;
-            line-height: 1.4;
-        }
-
-        section[data-testid="stSidebar"]
-        [role="radiogroup"] label {
-            border-radius: 10px !important;
-            padding: 9px 11px !important;
-            margin: 3px 0 !important;
-            color: #DCE7F2 !important;
-        }
-
-        section[data-testid="stSidebar"]
-        [role="radiogroup"] label:hover {
-            background: #173B5E !important;
-        }
-
-        section[data-testid="stSidebar"]
-        [data-testid="stCaptionContainer"] {
-            color: #9FB5CA !important;
-        }
-
-        /* ================================================================
-           HERO HEADER
-           ================================================================ */
-
-        .hero {
-            background:
-                linear-gradient(
-                    135deg,
-                    #0B1F33 0%,
-                    #123A5A 60%,
-                    #155E8A 100%
-                );
-
-            border-radius: 20px;
-            padding: 28px 32px;
-            margin-bottom: 24px;
-
-            box-shadow:
-                0 12px 30px
-                rgba(15, 23, 42, 0.14);
-        }
-
-        .hero-title {
-            color: #FFFFFF !important;
-            font-size: 2rem;
-            font-weight: 800;
-            margin: 0;
-        }
-
-        .hero-subtitle {
-            color: #D7E7F5 !important;
-            font-size: 1rem;
-            margin-top: 7px;
-        }
-
-        .hero-badge {
-            display: inline-block;
-            background: #E0F2FE;
-            color: #075985 !important;
-            border-radius: 999px;
-            padding: 6px 12px;
-            margin-top: 14px;
-            font-size: 0.78rem;
-            font-weight: 800;
-        }
-
-        /* ================================================================
-           SECTION HEADER
-           ================================================================ */
-
-        .section-header {
-            background: #FFFFFF;
-            border-left: 6px solid #2563EB;
-            border-radius: 12px;
-
-            padding: 16px 20px;
-            margin-bottom: 22px;
-
-            color: #0F172A !important;
-
-            font-size: 1.45rem;
-            font-weight: 800;
-
-            box-shadow:
-                0 3px 12px
-                rgba(15, 23, 42, 0.07);
-        }
-
-        /* ================================================================
-           INFORMATION CARDS
-           ================================================================ */
+        /* ====================================================
+           CARDS
+        ==================================================== */
 
         .info-card {
-            background: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            border-radius: 14px;
-            padding: 18px;
-            margin-bottom: 16px;
-
+            background:
+                linear-gradient(
+                    145deg,
+                    #0C2A43,
+                    #071A2B
+                );
+            border: 1px solid #19527A;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 18px;
             box-shadow:
-                0 3px 12px
-                rgba(15, 23, 42, 0.05);
+                0 10px 30px rgba(0, 0, 0, 0.35);
         }
 
         .info-card-title {
-            color: #0F172A !important;
-            font-size: 1rem;
+            color: #FFFFFF !important;
+            font-size: 21px;
             font-weight: 800;
             margin-bottom: 8px;
         }
 
         .info-card-text {
-            color: #475569 !important;
-            font-size: 0.9rem;
+            color: #D9F0FF !important;
+            font-size: 16px;
             line-height: 1.6;
         }
 
-        /* ================================================================
-           METRICS
-           ================================================================ */
-
-        [data-testid="stMetric"] {
-            background: #FFFFFF !important;
-            border: 1px solid #DDE5EE !important;
-            border-radius: 15px !important;
-            padding: 18px !important;
-
-            min-height: 125px;
-
+        .metric-card {
+            background:
+                linear-gradient(
+                    145deg,
+                    #0E3554,
+                    #071B2D
+                );
+            border: 1px solid #2472A3;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
             box-shadow:
-                0 4px 14px
-                rgba(15, 23, 42, 0.06);
+                0 8px 25px rgba(0, 0, 0, 0.30);
         }
 
-        [data-testid="stMetricLabel"] {
-            color: #64748B !important;
-            font-size: 0.78rem !important;
-            font-weight: 700 !important;
+        .metric-label {
+            color: #9EDCFF !important;
+            font-size: 14px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
 
-        [data-testid="stMetricLabel"] p {
-            color: #64748B !important;
+        .metric-value {
+            color: #FFFFFF !important;
+            font-size: 32px;
+            font-weight: 900;
+            margin-top: 5px;
         }
 
-        [data-testid="stMetricValue"] {
-            color: #0F172A !important;
-            font-size: 2rem !important;
-            font-weight: 850 !important;
+        /* ====================================================
+           TABS
+        ==================================================== */
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+            background: #061522;
+            border-radius: 12px;
+            padding: 7px;
+            border: 1px solid #173E59;
         }
 
-        [data-testid="stMetricDelta"] {
-            font-size: 0.82rem !important;
-            font-weight: 700 !important;
+        .stTabs [data-baseweb="tab"] {
+            color: #B8DDF2 !important;
+            background: transparent;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            padding: 10px 16px;
         }
 
-        /* ================================================================
+        .stTabs [data-baseweb="tab"]:hover {
+            color: #FFFFFF !important;
+            background: #123B5D;
+        }
+
+        .stTabs [aria-selected="true"] {
+            color: #FFFFFF !important;
+            background: #126A9C !important;
+        }
+
+        .stTabs [data-baseweb="tab-highlight"] {
+            background: #38BDF8 !important;
+        }
+
+        /* ====================================================
            BUTTONS
-           ================================================================ */
+        ==================================================== */
 
         .stButton > button {
-            min-height: 44px !important;
-            border-radius: 10px !important;
-            font-weight: 750 !important;
-            border: 1px solid #CBD5E1 !important;
-            background: #FFFFFF !important;
-            color: #0F172A !important;
-        }
-
-        .stButton > button:hover {
-            border-color: #2563EB !important;
-            color: #1D4ED8 !important;
-        }
-
-        .stButton > button[kind="primary"] {
             background:
                 linear-gradient(
                     135deg,
-                    #2563EB,
-                    #1D4ED8
-                ) !important;
-
+                    #087EA4,
+                    #126A9C
+                );
             color: #FFFFFF !important;
-            border: none !important;
-
-            box-shadow:
-                0 5px 14px
-                rgba(37, 99, 235, 0.25);
+            border: 1px solid #38BDF8;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 800;
+            font-size: 15px;
+            min-height: 44px;
         }
 
-        .stButton > button[kind="primary"] * {
+        .stButton > button:hover {
+            background:
+                linear-gradient(
+                    135deg,
+                    #0B9AC6,
+                    #087EA4
+                );
             color: #FFFFFF !important;
+            border-color: #7DD3FC;
         }
 
-        /* ================================================================
+        /* ====================================================
            INPUTS
-           ================================================================ */
+        ==================================================== */
 
-        [data-testid="stNumberInput"] input,
-        [data-testid="stTextInput"] input {
-            background: #FFFFFF !important;
-            color: #0F172A !important;
-            border: 1px solid #CBD5E1 !important;
-            border-radius: 9px !important;
-            font-size: 0.95rem !important;
+        input,
+        textarea {
+            color: #FFFFFF !important;
+            background-color: #071A2B !important;
+            border: 1px solid #28658A !important;
         }
 
-        [data-testid="stSelectbox"] > div > div {
-            background: #FFFFFF !important;
-            color: #0F172A !important;
-            border-color: #CBD5E1 !important;
+        input::placeholder,
+        textarea::placeholder {
+            color: #8DB7CD !important;
         }
 
-        [data-testid="stSelectbox"] * {
-            color: #0F172A !important;
+        [data-baseweb="select"] {
+            background-color: #071A2B !important;
         }
 
-        /* ================================================================
-           TABS
-           ================================================================ */
-
-        [data-testid="stTabs"] button {
-            color: #64748B !important;
-            font-weight: 700 !important;
+        [data-baseweb="select"] * {
+            color: #FFFFFF !important;
         }
 
-        [data-testid="stTabs"]
-        button[aria-selected="true"] {
-            color: #1D4ED8 !important;
+        [data-baseweb="input"] {
+            background-color: #071A2B !important;
         }
 
-        /* ================================================================
+        /* ====================================================
+           SELECTBOX
+        ==================================================== */
+
+        div[data-baseweb="select"] > div {
+            background-color: #071A2B !important;
+            border-color: #28658A !important;
+        }
+
+        div[data-baseweb="select"] span {
+            color: #FFFFFF !important;
+        }
+
+        /* ====================================================
            DATAFRAME
-           ================================================================ */
+        ==================================================== */
 
         [data-testid="stDataFrame"] {
-            background: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
-            border-radius: 12px !important;
+            border: 1px solid #225B7F;
+            border-radius: 12px;
             overflow: hidden;
         }
 
-        /* ================================================================
-           ALERTS
-           ================================================================ */
-
-        [data-testid="stAlert"] {
-            border-radius: 11px !important;
+        [data-testid="stDataFrame"] * {
+            color: #FFFFFF !important;
         }
 
-        /* ================================================================
-           EXPANDERS
-           ================================================================ */
+        /* ====================================================
+           METRICS
+        ==================================================== */
 
-        [data-testid="stExpander"] {
-            background: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
-            border-radius: 11px !important;
+        [data-testid="stMetric"] {
+            background:
+                linear-gradient(
+                    145deg,
+                    #0C2A43,
+                    #071A2B
+                );
+            border: 1px solid #1F5C83;
+            padding: 18px;
+            border-radius: 14px;
         }
 
-        [data-testid="stExpander"] summary {
-            color: #0F172A !important;
+        [data-testid="stMetricLabel"] {
+            color: #9EDCFF !important;
             font-weight: 700 !important;
         }
 
-        /* ================================================================
-           CAPTIONS
-           ================================================================ */
-
-        [data-testid="stCaptionContainer"],
-        [data-testid="stCaptionContainer"] * {
-            color: #64748B !important;
+        [data-testid="stMetricValue"] {
+            color: #FFFFFF !important;
+            font-size: 30px !important;
+            font-weight: 900 !important;
         }
 
-        /* ================================================================
+        [data-testid="stMetricDelta"] {
+            color: #CDEEFF !important;
+        }
+
+        /* ====================================================
+           EXPANDERS
+        ==================================================== */
+
+        [data-testid="stExpander"] {
+            background: #071A2B;
+            border: 1px solid #205A7D;
+            border-radius: 12px;
+        }
+
+        [data-testid="stExpander"] summary {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
+
+        /* ====================================================
+           ALERTS
+        ==================================================== */
+
+        [data-testid="stAlert"] {
+            border-radius: 12px;
+            border: 1px solid #28658A;
+        }
+
+        [data-testid="stAlert"] p {
+            color: #FFFFFF !important;
+        }
+
+        /* ====================================================
+           CODE
+        ==================================================== */
+
+        code {
+            color: #BDEBFF !important;
+            background: #061522 !important;
+        }
+
+        pre {
+            background: #030C15 !important;
+            border: 1px solid #194965 !important;
+            border-radius: 10px;
+        }
+
+        /* ====================================================
+           FILE UPLOADER
+        ==================================================== */
+
+        [data-testid="stFileUploader"] {
+            background: #071A2B;
+            border: 1px dashed #3A7EA5;
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        [data-testid="stFileUploader"] * {
+            color: #EAF6FF !important;
+        }
+
+        /* ====================================================
+           PLOTLY
+        ==================================================== */
+
+        .js-plotly-plot {
+            background: #071A2B !important;
+            border-radius: 12px;
+        }
+
+        /* ====================================================
            DIVIDERS
-           ================================================================ */
+        ==================================================== */
 
         hr {
-            border-color: #DCE4EC !important;
-            margin: 24px 0 !important;
+            border-color: #205A7D !important;
         }
 
-        /* ================================================================
-           RESULT CARD
-           ================================================================ */
+        /* ====================================================
+           FOOTER
+        ==================================================== */
 
-        .prediction-card {
-            background: #FFFFFF;
-            border: 1px solid #DCE5EE;
-            border-radius: 18px;
-            padding: 24px;
-            margin: 15px 0;
-
-            box-shadow:
-                0 7px 20px
-                rgba(15, 23, 42, 0.08);
+        .footer {
+            text-align: center;
+            color: #8FBBD2 !important;
+            font-size: 13px;
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid #194965;
         }
 
-        .prediction-title {
-            color: #0F172A !important;
-            font-size: 1.25rem;
+        /* ====================================================
+           DATASET FACT BOXES
+        ==================================================== */
+
+        .fact-box {
+            background:
+                linear-gradient(
+                    145deg,
+                    #0B2C47,
+                    #071A2B
+                );
+            border: 1px solid #216589;
+            border-radius: 14px;
+            padding: 20px;
+            min-height: 125px;
+            margin-bottom: 15px;
+        }
+
+        .fact-title {
+            color: #7DD3FC !important;
+            font-size: 14px;
             font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
         }
 
-        .prediction-subtitle {
-            color: #64748B !important;
-            font-size: 0.9rem;
+        .fact-value {
+            color: #FFFFFF !important;
+            font-size: 28px;
+            font-weight: 900;
+            margin-top: 8px;
         }
 
-        /* ================================================================
-           RISK BOXES
-           ================================================================ */
-
-        .risk-low {
-            background: #ECFDF5;
-            border: 1px solid #A7F3D0;
-            color: #065F46 !important;
-            border-radius: 12px;
-            padding: 16px;
-            font-weight: 800;
+        .fact-description {
+            color: #C8E8F8 !important;
+            font-size: 14px;
+            margin-top: 4px;
         }
 
-        .risk-medium {
-            background: #FFFBEB;
-            border: 1px solid #FDE68A;
-            color: #92400E !important;
-            border-radius: 12px;
-            padding: 16px;
-            font-weight: 800;
-        }
+        /* ====================================================
+           RESPONSIVE
+        ==================================================== */
 
-        .risk-high {
-            background: #FFF7ED;
-            border: 1px solid #FED7AA;
-            color: #9A3412 !important;
-            border-radius: 12px;
-            padding: 16px;
-            font-weight: 800;
-        }
+        @media (max-width: 900px) {
 
-        .risk-critical {
-            background: #FEF2F2;
-            border: 1px solid #FECACA;
-            color: #991B1B !important;
-            border-radius: 12px;
-            padding: 16px;
-            font-weight: 800;
+            .main-title {
+                font-size: 34px;
+            }
+
+            h1 {
+                font-size: 32px !important;
+            }
+
+            h2 {
+                font-size: 27px !important;
+            }
+
+            h3 {
+                font-size: 21px !important;
+            }
         }
 
         </style>
@@ -2491,1376 +1686,984 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    # =========================================================================
-    # CACHED LOADERS
-    # =========================================================================
-
-    @st.cache_resource
-    def load_stats():
-
-        path = os.path.join(
-            MODELS_DIR,
-            "dataset_stats.joblib"
-        )
-
-        if os.path.exists(path):
-            return joblib.load(path)
-
-        return None
-
-    @st.cache_resource
-    def load_results():
-
-        path = os.path.join(
-            MODELS_DIR,
-            "eval_results.joblib"
-        )
-
-        if os.path.exists(path):
-            return joblib.load(path)
-
-        return None
-
-    @st.cache_data(show_spinner=False)
-    def load_sample():
-
-        if not os.path.exists(
-            DATA_PATH
-        ):
-            return None
-
-        sample = pd.read_csv(
-            DATA_PATH,
-            nrows=5000
-        )
-
-        sample.drop_duplicates(
-            inplace=True
-        )
-
-        return sample.sample(
-            min(
-                2000,
-                len(sample)
-            ),
-            random_state=42
-        )
-
-    def load_image(
-        filename
-    ):
-
-        path = os.path.join(
-            ASSETS_DIR,
-            filename
-        )
-
-        if os.path.exists(path):
-            return Image.open(path)
-
-        return None
-
-    # =========================================================================
+    # ========================================================
     # SIDEBAR
-    # =========================================================================
+    # ========================================================
 
-    with st.sidebar:
-
-        st.markdown(
-            """
-            <div class="sidebar-brand">
-                <div class="sidebar-brand-title">
-                    🛡️ AI Fraud Detection
-                </div>
-                <div class="sidebar-brand-subtitle">
-                    Machine Learning Risk Analytics System
-                </div>
+    st.sidebar.markdown(
+        """
+        <div style="
+            text-align:center;
+            padding:15px 5px 25px 5px;
+        ">
+            <div style="
+                font-size:48px;
+                margin-bottom:5px;
+            ">
+                💳
             </div>
-            """,
-            unsafe_allow_html=True
+
+            <div style="
+                font-size:22px;
+                font-weight:900;
+                color:#FFFFFF;
+            ">
+                Fraud Detection AI
+            </div>
+
+            <div style="
+                font-size:13px;
+                color:#9EDCFF;
+                margin-top:5px;
+            ">
+                Financial Risk Analytics
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "Dashboard",
+            "Dataset Analysis",
+            "EDA / Visualizations",
+            "Model Performance",
+            "Fraud Prediction",
+            "Batch Prediction",
+            "About"
+        ]
+    )
+
+    st.sidebar.markdown("---")
+
+    st.sidebar.markdown(
+        """
+        <div style="
+            background:#071A2B;
+            border:1px solid #1C526F;
+            border-radius:12px;
+            padding:15px;
+        ">
+            <div style="
+                color:#7DD3FC;
+                font-weight:800;
+                font-size:13px;
+            ">
+                PROJECT
+            </div>
+
+            <div style="
+                color:#FFFFFF;
+                font-size:15px;
+                font-weight:700;
+                margin-top:5px;
+            ">
+                AI-Powered Financial Fraud Detection
+            </div>
+
+            <div style="
+                color:#A7D8F7;
+                font-size:12px;
+                margin-top:8px;
+            ">
+                Machine Learning • Risk Analytics • Streamlit
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ========================================================
+    # LOAD DATA
+    # ========================================================
+
+    try:
+        df = load_dataset()
+        clean_df, duplicate_count = clean_dataset(df)
+    except Exception as e:
+
+        st.error(
+            f"Unable to load dataset: {e}"
         )
 
-        st.markdown(
-            "### Navigation"
-        )
+        st.stop()
 
-        page = st.radio(
-            "Navigation",
-            [
-                "Dashboard",
-                "Dataset Analysis",
-                "EDA / Visualizations",
-                "Model Performance",
-                "Fraud Prediction",
-                "Batch Prediction",
-                "About"
-            ],
-            label_visibility="collapsed"
-        )
+    stats = load_saved_stats()
+    results = load_saved_results()
 
-        st.markdown("---")
-
-        if models_ready():
-
-            st.success(
-                "✓ Models Ready"
-            )
-
-        else:
-
-            st.warning(
-                "Models not trained"
-            )
-
-        st.caption(
-            "Dataset: Kaggle Credit Card Fraud Detection"
-        )
-
-        st.caption(
-            "IBM SkillsBuild Academic Internship"
-        )
-
-    # =========================================================================
-    # LOAD SAVED RESULTS
-    # =========================================================================
-
-    stats = load_stats()
-    results = load_results()
-
-    # =========================================================================
-    # PAGE 1 - DASHBOARD
-    # =========================================================================
+    # ========================================================
+    # DASHBOARD
+    # ========================================================
 
     if page == "Dashboard":
 
         st.markdown(
             """
-            <div class="hero">
-                <div class="hero-title">
-                    🛡️ AI-Powered Financial Fraud Detection
+            <div class="main-title">
+                AI-Powered Financial Fraud Detection
+            </div>
+
+            <div class="main-subtitle">
+                Machine Learning System for Transaction Risk Analytics
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    🔐 Intelligent Financial Transaction Monitoring
                 </div>
 
-                <div class="hero-subtitle">
-                    Machine Learning-Based Transaction Risk Analytics
-                    and Fraud Detection System
-                </div>
-
-                <div class="hero-badge">
-                    RANDOM FOREST • XGBOOST • LIGHTGBM • ISOLATION FOREST
+                <div class="info-card-text">
+                    This application uses machine learning to identify
+                    potentially fraudulent credit card transactions,
+                    compare multiple classification and anomaly detection
+                    algorithms, and provide transaction-level risk analysis.
                 </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        if not stats:
+        total_transactions = len(clean_df)
 
-            st.warning(
-                "Training artifacts are not available yet. "
-                "Run the training pipeline first."
+        fraud_count = int(
+            clean_df["Class"].sum()
+        )
+
+        legitimate_count = int(
+            (clean_df["Class"] == 0).sum()
+        )
+
+        fraud_rate = (
+            fraud_count / total_transactions * 100
+        )
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        with c1:
+            st.metric(
+                "Transactions",
+                f"{total_transactions:,}"
             )
 
-            st.code(
-                "python SalapareddiLaxmana_FinancialFraudDetection.py",
-                language="bash"
+        with c2:
+            st.metric(
+                "Fraud Cases",
+                f"{fraud_count:,}"
             )
 
-            st.stop()
+        with c3:
+            st.metric(
+                "Legitimate",
+                f"{legitimate_count:,}"
+            )
 
-        st.markdown(
-            '<div class="section-header">System Overview</div>',
-            unsafe_allow_html=True
-        )
+        with c4:
+            st.metric(
+                "Fraud Rate",
+                f"{fraud_rate:.3f}%"
+            )
 
-        # ---------------------------------------------------------------------
-        # KPI ROW
-        # ---------------------------------------------------------------------
+        st.markdown("## System Overview")
 
-        c1, c2, c3, c4, c5 = st.columns(5)
+        col1, col2 = st.columns(2)
 
-        c1.metric(
-            "Total Transactions",
-            f"{stats['total_rows']:,}"
-        )
-
-        c2.metric(
-            "Legitimate",
-            f"{stats['legit_count']:,}"
-        )
-
-        c3.metric(
-            "Fraudulent",
-            f"{stats['fraud_count']:,}"
-        )
-
-        c4.metric(
-            "Average Amount",
-            f"${stats['mean_amount']:.2f}"
-        )
-
-        c5.metric(
-            "Fraud Avg. Amount",
-            f"${stats['mean_amount_fraud']:.2f}"
-        )
-
-        st.markdown("---")
-
-        # ---------------------------------------------------------------------
-        # CHARTS
-        # ---------------------------------------------------------------------
-
-        col_a, col_b = st.columns(2)
-
-        with col_a:
+        with col1:
 
             st.markdown(
-                "### Class Distribution"
+                """
+                <div class="info-card">
+                    <div class="info-card-title">
+                        🤖 Machine Learning Models
+                    </div>
+
+                    <div class="info-card-text">
+                        • Logistic Regression<br>
+                        • Random Forest<br>
+                        • XGBoost<br>
+                        • LightGBM<br>
+                        • Isolation Forest
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
-            fig = go.Figure(
-                go.Pie(
-                    labels=[
-                        "Legitimate",
-                        "Fraud"
-                    ],
-                    values=[
-                        stats["legit_count"],
-                        stats["fraud_count"]
-                    ],
-                    hole=0.58,
-                    marker_colors=[
-                        "#2563EB",
-                        "#DC2626"
-                    ],
-                    textinfo="label+percent"
-                )
-            )
-
-            fig.update_layout(
-                height=340,
-                margin=dict(
-                    t=20,
-                    b=20,
-                    l=20,
-                    r=20
-                ),
-                paper_bgcolor="white",
-                plot_bgcolor="white",
-                legend=dict(
-                    orientation="h",
-                    y=-0.05
-                )
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
-
-        with col_b:
+        with col2:
 
             st.markdown(
-                "### Average Transaction Amount"
+                """
+                <div class="info-card">
+                    <div class="info-card-title">
+                        📊 Analytics Capabilities
+                    </div>
+
+                    <div class="info-card-text">
+                        • Exploratory Data Analysis<br>
+                        • Class Imbalance Analysis<br>
+                        • ROC-AUC & PR-AUC<br>
+                        • Confusion Matrix Analysis<br>
+                        • Single & Batch Prediction
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
             )
-
-            fig2 = go.Figure(
-                go.Bar(
-                    x=[
-                        "Legitimate",
-                        "Fraudulent"
-                    ],
-                    y=[
-                        stats[
-                            "mean_amount_legit"
-                        ],
-                        stats[
-                            "mean_amount_fraud"
-                        ]
-                    ],
-                    marker_color=[
-                        "#2563EB",
-                        "#DC2626"
-                    ],
-                    text=[
-                        "$%.2f"
-                        % stats[
-                            "mean_amount_legit"
-                        ],
-                        "$%.2f"
-                        % stats[
-                            "mean_amount_fraud"
-                        ]
-                    ],
-                    textposition="outside"
-                )
-            )
-
-            fig2.update_layout(
-                height=340,
-                yaxis_title="Amount ($)",
-                paper_bgcolor="white",
-                plot_bgcolor="white",
-                margin=dict(
-                    t=30,
-                    b=30,
-                    l=30,
-                    r=30
-                )
-            )
-
-            st.plotly_chart(
-                fig2,
-                use_container_width=True
-            )
-
-        # ---------------------------------------------------------------------
-        # MODEL SUMMARY
-        # ---------------------------------------------------------------------
-
-        st.markdown("---")
-
-        st.markdown(
-            '<div class="section-header">Model Performance Summary</div>',
-            unsafe_allow_html=True
-        )
 
         if results:
 
-            rows = []
+            st.markdown("## Model Summary")
 
-            for result in results:
-
-                rows.append(
-                    {
-                        "Model":
-                            result["model_name"],
-
-                        "Precision":
-                            f"{result['precision']:.4f}",
-
-                        "Recall":
-                            f"{result['recall']:.4f}",
-
-                        "F1 Score":
-                            f"{result['f1']:.4f}",
-
-                        "ROC-AUC":
-                            f"{result['roc_auc']:.4f}",
-
-                        "PR-AUC":
-                            f"{result['pr_auc']:.4f}"
+            model_df = pd.DataFrame(
+                {
+                    name: {
+                        "Precision": result["precision"],
+                        "Recall": result["recall"],
+                        "F1 Score": result["f1"],
+                        "ROC-AUC": result["roc_auc"],
+                        "PR-AUC": result["pr_auc"]
                     }
-                )
+                    for name, result in results.items()
+                }
+            ).T
 
             st.dataframe(
-                pd.DataFrame(rows),
-                use_container_width=True,
-                hide_index=True
+                model_df.style.format(
+                    "{:.4f}"
+                ),
+                use_container_width=True
             )
 
-            best = max(
-                results,
-                key=lambda result:
-                result["f1"]
-            )
-
-            st.success(
-                "Best model by F1 Score: "
-                f"**{best['model_name']}** "
-                f"(F1 = {best['f1']:.4f})"
-            )
-
-    # =========================================================================
-    # PAGE 2 - DATASET ANALYSIS
-    # =========================================================================
+    # ========================================================
+    # DATASET ANALYSIS
+    # ========================================================
 
     elif page == "Dataset Analysis":
 
         st.markdown(
-            '<div class="section-header">Dataset Analysis</div>',
+            """
+            <div class="main-title">
+                Dataset Analysis
+            </div>
+
+            <div class="main-subtitle">
+                Credit Card Fraud Detection Dataset
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
-        sample = load_sample()
-
-        tab1, tab2, tab3 = st.tabs(
+        tab1, tab2, tab3, tab4 = st.tabs(
             [
-                "Dataset Overview",
-                "Feature Statistics",
-                "Sample Data"
+                "Overview",
+                "Dataset Facts",
+                "Class Imbalance",
+                "Data Preview"
             ]
         )
 
-        # ---------------------------------------------------------------------
-        # OVERVIEW
-        # ---------------------------------------------------------------------
-
         with tab1:
 
-            col1, col2 = st.columns(2)
+            st.markdown(
+                """
+                <div class="info-card">
+                    <div class="info-card-title">
+                        📌 Dataset Overview
+                    </div>
 
-            with col1:
+                    <div class="info-card-text">
+                        The project uses the Kaggle Credit Card Fraud
+                        Detection dataset. The data contains anonymized
+                        numerical transaction features and a binary target
+                        indicating whether a transaction is fraudulent.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-                st.markdown(
-                    "### Dataset Facts"
-                )
+            st.markdown("### Dataset Structure")
 
-                if stats:
+            st.write(
+                "The dataset contains transaction timing, transaction "
+                "amount and anonymized PCA-transformed features."
+            )
 
-                    facts = [
-                        (
-                            "Source",
-                            "Kaggle — ULB Machine Learning Group"
-                        ),
-                        (
-                            "Transactions",
-                            f"{stats['total_rows']:,}"
-                        ),
-                        (
-                            "Duplicate Rows Removed",
-                            "1,081"
-                        ),
-                        (
-                            "Features",
-                            "Time, V1–V28, Amount"
-                        ),
-                        (
-                            "Target",
-                            "Class (0 = Legit, 1 = Fraud)"
-                        ),
-                        (
-                            "Missing Values",
-                            "None"
-                        ),
-                        (
-                            "Time Window",
-                            "~48 hours"
-                        )
-                    ]
+            columns = list(
+                clean_df.columns
+            )
 
-                    for key, value in facts:
+            st.write(
+                f"**Number of columns:** {len(columns)}"
+            )
 
-                        st.markdown(
-                            f"""
-                            <div class="info-card">
-                                <div class="info-card-title">
-                                    {key}
-                                </div>
+            st.write(
+                "**Target column:** `Class`"
+            )
 
-                                <div class="info-card-text">
-                                    {value}
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
+            st.write(
+                "**Fraud label:** `1`"
+            )
 
-            with col2:
-
-                st.markdown(
-                    "### Class Imbalance"
-                )
-
-                if stats:
-
-                    imbalance_df = pd.DataFrame(
-                        {
-                            "Class": [
-                                "Legitimate",
-                                "Fraud"
-                            ],
-                            "Count": [
-                                stats[
-                                    "legit_count"
-                                ],
-                                stats[
-                                    "fraud_count"
-                                ]
-                            ],
-                            "Percentage": [
-                                f"{stats['legit_pct']:.4f}%",
-                                f"{stats['fraud_pct']:.4f}%"
-                            ]
-                        }
-                    )
-
-                    st.dataframe(
-                        imbalance_df,
-                        use_container_width=True,
-                        hide_index=True
-                    )
-
-                    st.warning(
-                        "The dataset is highly imbalanced. "
-                        "Approximately 599 legitimate transactions "
-                        "occur for every 1 fraudulent transaction. "
-                        "Therefore accuracy alone is not sufficient."
-                    )
-
-        # ---------------------------------------------------------------------
-        # STATISTICS
-        # ---------------------------------------------------------------------
+            st.write(
+                "**Legitimate label:** `0`"
+            )
 
         with tab2:
 
-            if sample is not None:
+            st.markdown(
+                "## Dataset Facts"
+            )
+
+            total = len(clean_df)
+            fraud = int(
+                clean_df["Class"].sum()
+            )
+            legitimate = int(
+                (clean_df["Class"] == 0).sum()
+            )
+
+            amount_mean = clean_df[
+                "Amount"
+            ].mean()
+
+            fraud_amount_mean = clean_df[
+                clean_df["Class"] == 1
+            ]["Amount"].mean()
+
+            c1, c2, c3 = st.columns(3)
+
+            with c1:
+                st.markdown(
+                    f"""
+                    <div class="fact-box">
+                        <div class="fact-title">
+                            Transactions
+                        </div>
+
+                        <div class="fact-value">
+                            {total:,}
+                        </div>
+
+                        <div class="fact-description">
+                            Clean transaction records
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            with c2:
+                st.markdown(
+                    f"""
+                    <div class="fact-box">
+                        <div class="fact-title">
+                            Fraud Transactions
+                        </div>
+
+                        <div class="fact-value">
+                            {fraud:,}
+                        </div>
+
+                        <div class="fact-description">
+                            Confirmed fraud labels
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            with c3:
+                st.markdown(
+                    f"""
+                    <div class="fact-box">
+                        <div class="fact-title">
+                            Legitimate
+                        </div>
+
+                        <div class="fact-value">
+                            {legitimate:,}
+                        </div>
+
+                        <div class="fact-description">
+                            Legitimate transactions
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            c4, c5, c6 = st.columns(3)
+
+            with c4:
 
                 st.markdown(
-                    "### Descriptive Statistics"
+                    f"""
+                    <div class="fact-box">
+                        <div class="fact-title">
+                            Fraud Rate
+                        </div>
+
+                        <div class="fact-value">
+                            {fraud / total * 100:.3f}%
+                        </div>
+
+                        <div class="fact-description">
+                            Share of fraudulent transactions
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
 
-                st.caption(
-                    "Statistics calculated from a 2,000-row sample."
+            with c5:
+
+                st.markdown(
+                    f"""
+                    <div class="fact-box">
+                        <div class="fact-title">
+                            Average Amount
+                        </div>
+
+                        <div class="fact-value">
+                            ${amount_mean:.2f}
+                        </div>
+
+                        <div class="fact-description">
+                            Across all transactions
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
 
-                display_cols = (
-                    ["Time", "Amount"]
-                    + [
-                        f"V{i}"
-                        for i in range(1, 11)
+            with c6:
+
+                st.markdown(
+                    f"""
+                    <div class="fact-box">
+                        <div class="fact-title">
+                            Fraud Avg. Amount
+                        </div>
+
+                        <div class="fact-value">
+                            ${fraud_amount_mean:.2f}
+                        </div>
+
+                        <div class="fact-description">
+                            Average fraudulent transaction
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            st.markdown("### Dataset Columns")
+
+            column_df = pd.DataFrame(
+                {
+                    "Column": clean_df.columns,
+                    "Data Type": [
+                        str(clean_df[c].dtype)
+                        for c in clean_df.columns
+                    ],
+                    "Missing Values": [
+                        int(clean_df[c].isna().sum())
+                        for c in clean_df.columns
                     ]
-                )
+                }
+            )
 
-                st.dataframe(
-                    sample[
-                        display_cols
-                    ].describe().round(4),
-                    use_container_width=True
-                )
-
-                st.markdown(
-                    "### Transaction Amount by Class"
-                )
-
-                amount_stats = pd.DataFrame(
-                    {
-                        "Legitimate":
-                            sample.loc[
-                                sample["Class"] == 0,
-                                "Amount"
-                            ].describe(),
-
-                        "Fraud":
-                            sample.loc[
-                                sample["Class"] == 1,
-                                "Amount"
-                            ].describe()
-                    }
-                ).round(4)
-
-                st.dataframe(
-                    amount_stats,
-                    use_container_width=True
-                )
-
-        # ---------------------------------------------------------------------
-        # SAMPLE DATA
-        # ---------------------------------------------------------------------
+            st.dataframe(
+                column_df,
+                use_container_width=True,
+                hide_index=True
+            )
 
         with tab3:
 
-            if sample is not None:
+            st.markdown(
+                """
+                <div class="info-card">
+                    <div class="info-card-title">
+                        ⚠️ Severe Class Imbalance
+                    </div>
 
-                st.markdown(
-                    "### Transaction Sample"
-                )
+                    <div class="info-card-text">
+                        Fraud represents only a very small percentage of
+                        all transactions. This means a model could achieve
+                        high accuracy while still failing to detect fraud.
+                        Therefore, this project emphasizes Precision,
+                        Recall, F1 Score, ROC-AUC and PR-AUC.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-                show_cols = (
-                    ["Time", "Amount", "Class"]
-                    + [
-                        f"V{i}"
-                        for i in range(1, 6)
+            fraud_count = int(
+                clean_df["Class"].sum()
+            )
+
+            legitimate_count = int(
+                (clean_df["Class"] == 0).sum()
+            )
+
+            imbalance_df = pd.DataFrame(
+                {
+                    "Class": [
+                        "Legitimate",
+                        "Fraud"
+                    ],
+                    "Count": [
+                        legitimate_count,
+                        fraud_count
+                    ],
+                    "Percentage": [
+                        legitimate_count / len(clean_df) * 100,
+                        fraud_count / len(clean_df) * 100
                     ]
+                }
+            )
+
+            st.dataframe(
+                imbalance_df.style.format(
+                    {"Percentage": "{:.4f}%"}
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            if px:
+
+                fig = px.bar(
+                    imbalance_df,
+                    x="Class",
+                    y="Count",
+                    text="Count",
+                    title="Transaction Class Distribution"
                 )
 
-                st.dataframe(
-                    sample[
-                        show_cols
-                    ].head(50),
-                    use_container_width=True,
-                    hide_index=True
+                fig.update_layout(
+                    paper_bgcolor="#071A2B",
+                    plot_bgcolor="#071A2B",
+                    font=dict(
+                        color="white"
+                    )
                 )
 
-    # =========================================================================
-    # PAGE 3 - EDA
-    # =========================================================================
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True
+                )
+
+        with tab4:
+
+            st.markdown(
+                "## Data Preview"
+            )
+
+            st.dataframe(
+                clean_df.head(20),
+                use_container_width=True,
+                hide_index=True
+            )
+
+    # ========================================================
+    # EDA
+    # ========================================================
 
     elif page == "EDA / Visualizations":
 
         st.markdown(
-            '<div class="section-header">Exploratory Data Analysis</div>',
+            """
+            <div class="main-title">
+                Exploratory Data Analysis
+            </div>
+
+            <div class="main-subtitle">
+                Visual exploration of transaction behavior
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
-        st.info(
-            "Visual analysis of transaction distribution, amount patterns, "
-            "time patterns, feature relationships, and class imbalance."
-        )
-
-        charts = [
+        eda_images = [
             (
-                "eda_class_distribution.png",
-                "Class Distribution"
+                "Class Distribution",
+                "class_distribution.png"
             ),
             (
-                "eda_amount_distribution.png",
-                "Transaction Amount Distribution"
+                "Amount Distribution",
+                "amount_distribution.png"
             ),
             (
-                "eda_time_distribution.png",
-                "Transaction Time Distribution"
+                "Amount by Class",
+                "amount_by_class.png"
             ),
             (
-                "eda_fraud_by_hour.png",
-                "Transactions by Hour"
+                "Transactions by Hour",
+                "transactions_by_hour.png"
             ),
             (
-                "eda_amount_boxplot.png",
-                "Amount Boxplot by Class"
+                "Correlation Heatmap",
+                "correlation_heatmap.png"
             ),
             (
-                "eda_top_features.png",
-                "Top Features vs Class"
-            ),
-            (
-                "eda_correlation_heatmap.png",
-                "Feature Correlation Heatmap"
+                "Fraud Percentage",
+                "fraud_percentage.png"
             )
         ]
 
-        for filename, title in charts:
+        for title, filename in eda_images:
 
-            st.markdown(
-                f"### {title}"
-            )
-
-            image = load_image(
+            path = os.path.join(
+                ASSETS_DIR,
                 filename
             )
 
-            if image:
+            if os.path.exists(path):
+
+                st.markdown(
+                    f"### {title}"
+                )
 
                 st.image(
-                    image,
+                    path,
                     use_container_width=True
                 )
 
-            else:
+                st.markdown("---")
 
-                st.warning(
-                    "Chart not available. "
-                    "Run the training pipeline first."
-                )
-
-            st.markdown("---")
-
-    # =========================================================================
-    # PAGE 4 - MODEL PERFORMANCE
-    # =========================================================================
+    # ========================================================
+    # MODEL PERFORMANCE
+    # ========================================================
 
     elif page == "Model Performance":
 
         st.markdown(
-            '<div class="section-header">Machine Learning Model Performance</div>',
+            """
+            <div class="main-title">
+                Model Performance
+            </div>
+
+            <div class="main-subtitle">
+                Comparative evaluation of fraud detection algorithms
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
         if not results:
 
             st.warning(
-                "Model evaluation results are not available."
+                "Model evaluation results are not available. "
+                "Run the training pipeline first."
             )
 
             st.stop()
 
-        tab1, tab2, tab3, tab4 = st.tabs(
+        performance_df = pd.DataFrame(
             [
-                "Metrics",
-                "ROC & PR Curves",
-                "Confusion Matrices",
-                "Comparison"
+                {
+                    "Model": name,
+                    "Precision": result["precision"],
+                    "Recall": result["recall"],
+                    "F1 Score": result["f1"],
+                    "ROC-AUC": result["roc_auc"],
+                    "PR-AUC": result["pr_auc"]
+                }
+                for name, result in results.items()
             ]
         )
 
-        # ---------------------------------------------------------------------
-        # METRICS
-        # ---------------------------------------------------------------------
+        st.dataframe(
+            performance_df.style.format(
+                {
+                    "Precision": "{:.4f}",
+                    "Recall": "{:.4f}",
+                    "F1 Score": "{:.4f}",
+                    "ROC-AUC": "{:.4f}",
+                    "PR-AUC": "{:.4f}"
+                }
+            ),
+            use_container_width=True,
+            hide_index=True
+        )
 
-        with tab1:
+        st.markdown("## Evaluation Charts")
 
-            st.markdown(
-                "### Evaluation Metrics"
-            )
+        roc_path = os.path.join(
+            ASSETS_DIR,
+            "roc_curves.png"
+        )
 
-            st.caption(
-                "Metrics are calculated on the held-out stratified test set."
-            )
+        pr_path = os.path.join(
+            ASSETS_DIR,
+            "precision_recall_curves.png"
+        )
 
-            metrics_df = pd.DataFrame(
-                [
-                    {
-                        "Model":
-                            result["model_name"],
+        metrics_path = os.path.join(
+            ASSETS_DIR,
+            "model_metrics.png"
+        )
 
-                        "Precision":
-                            result["precision"],
-
-                        "Recall":
-                            result["recall"],
-
-                        "F1 Score":
-                            result["f1"],
-
-                        "ROC-AUC":
-                            result["roc_auc"],
-
-                        "PR-AUC":
-                            result["pr_auc"]
-                    }
-
-                    for result in results
-                ]
-            )
-
-            st.dataframe(
-                metrics_df,
-                use_container_width=True,
-                hide_index=True
-            )
+        if os.path.exists(roc_path):
 
             st.markdown(
-                "### Metric Visualization"
+                "### ROC Curves"
             )
 
-            metric_choice = st.selectbox(
-                "Select Metric",
-                [
-                    "Precision",
-                    "Recall",
-                    "F1 Score",
-                    "ROC-AUC",
-                    "PR-AUC"
-                ]
-            )
-
-            metric_key = {
-                "Precision":
-                    "precision",
-
-                "Recall":
-                    "recall",
-
-                "F1 Score":
-                    "f1",
-
-                "ROC-AUC":
-                    "roc_auc",
-
-                "PR-AUC":
-                    "pr_auc"
-            }[metric_choice]
-
-            fig = go.Figure(
-                go.Bar(
-                    x=[
-                        result["model_name"]
-                        for result in results
-                    ],
-                    y=[
-                        result[metric_key]
-                        for result in results
-                    ],
-                    marker_color=[
-                        "#2563EB",
-                        "#16A34A",
-                        "#F59E0B",
-                        "#7C3AED",
-                        "#DC2626"
-                    ],
-                    text=[
-                        f"{result[metric_key]:.4f}"
-                        for result in results
-                    ],
-                    textposition="outside"
-                )
-            )
-
-            fig.update_layout(
-                title=metric_choice,
-                yaxis_range=[
-                    0,
-                    1.1
-                ],
-                height=400,
-                paper_bgcolor="white",
-                plot_bgcolor="white"
-            )
-
-            st.plotly_chart(
-                fig,
+            st.image(
+                roc_path,
                 use_container_width=True
             )
 
-        # ---------------------------------------------------------------------
-        # ROC / PR
-        # ---------------------------------------------------------------------
-
-        with tab2:
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-
-                image = load_image(
-                    "eval_roc_curves.png"
-                )
-
-                if image:
-
-                    st.image(
-                        image,
-                        caption="ROC Curves",
-                        use_container_width=True
-                    )
-
-            with col2:
-
-                image = load_image(
-                    "eval_pr_curves.png"
-                )
-
-                if image:
-
-                    st.image(
-                        image,
-                        caption="Precision-Recall Curves",
-                        use_container_width=True
-                    )
-
-        # ---------------------------------------------------------------------
-        # CONFUSION MATRICES
-        # ---------------------------------------------------------------------
-
-        with tab3:
-
-            image = load_image(
-                "eval_confusion_matrices.png"
-            )
-
-            if image:
-
-                st.image(
-                    image,
-                    use_container_width=True
-                )
+        if os.path.exists(pr_path):
 
             st.markdown(
-                "### Individual Confusion Matrix"
+                "### Precision-Recall Curves"
             )
 
-            selected_model = st.selectbox(
-                "Select Model",
-                [
-                    result["model_name"]
-                    for result in results
-                ]
-            )
-
-            selected_result = next(
-                result
-                for result in results
-                if result["model_name"]
-                == selected_model
-            )
-
-            cm = np.array(
-                selected_result[
-                    "confusion_matrix"
-                ]
-            )
-
-            tn, fp, fn, tp = (
-                cm[0, 0],
-                cm[0, 1],
-                cm[1, 0],
-                cm[1, 1]
-            )
-
-            c1, c2, c3, c4 = st.columns(4)
-
-            c1.metric(
-                "True Negatives",
-                f"{tn:,}"
-            )
-
-            c2.metric(
-                "False Positives",
-                f"{fp:,}"
-            )
-
-            c3.metric(
-                "False Negatives",
-                f"{fn:,}"
-            )
-
-            c4.metric(
-                "True Positives",
-                f"{tp:,}"
-            )
-
-            fig_cm = px.imshow(
-                cm,
-                text_auto=True,
-                labels={
-                    "x": "Predicted",
-                    "y": "Actual"
-                },
-                x=[
-                    "Legitimate",
-                    "Fraud"
-                ],
-                y=[
-                    "Legitimate",
-                    "Fraud"
-                ],
-                color_continuous_scale="Blues"
-            )
-
-            fig_cm.update_layout(
-                height=400,
-                paper_bgcolor="white"
-            )
-
-            st.plotly_chart(
-                fig_cm,
+            st.image(
+                pr_path,
                 use_container_width=True
             )
 
-        # ---------------------------------------------------------------------
-        # COMPARISON
-        # ---------------------------------------------------------------------
+        if os.path.exists(metrics_path):
 
-        with tab4:
-
-            image = load_image(
-                "eval_metrics_comparison.png"
+            st.markdown(
+                "### Metrics Comparison"
             )
 
-            if image:
+            st.image(
+                metrics_path,
+                use_container_width=True
+            )
 
-                st.image(
-                    image,
-                    use_container_width=True
-                )
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    📌 Why multiple metrics?
+                </div>
 
-    # =========================================================================
-    # PAGE 5 - FRAUD PREDICTION
-    # =========================================================================
+                <div class="info-card-text">
+                    Fraud detection is an imbalanced classification
+                    problem. Precision measures how many flagged transactions
+                    are actually fraudulent, while Recall measures how many
+                    fraudulent transactions were detected. F1 Score balances
+                    Precision and Recall. ROC-AUC and PR-AUC evaluate ranking
+                    performance across thresholds.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # ========================================================
+    # FRAUD PREDICTION
+    # ========================================================
 
     elif page == "Fraud Prediction":
 
         st.markdown(
-            '<div class="section-header">Single Transaction Fraud Prediction</div>',
+            """
+            <div class="main-title">
+                Fraud Prediction
+            </div>
+
+            <div class="main-subtitle">
+                Analyze an individual transaction
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
-        if not models_ready():
-
-            st.error(
-                "Models are not available. "
-                "Run the training pipeline first."
-            )
-
-            st.code(
-                "python SalapareddiLaxmana_FinancialFraudDetection.py",
-                language="bash"
-            )
-
-            st.stop()
-
-        available_models = (
-            list_trained_models()
-        )
-
-        col1, col2 = st.columns(
-            [2, 3]
-        )
-
-        with col1:
-
-            selected_model = st.selectbox(
-                "Select Machine Learning Model",
-                available_models,
-                index=(
-                    available_models.index(
-                        "XGBoost"
-                    )
-                    if "XGBoost"
-                    in available_models
-                    else 0
-                )
-            )
-
-        with col2:
-
-            st.info(
-                "Enter transaction attributes. "
-                "V1–V28 are anonymized PCA-transformed features."
-            )
-
-        st.markdown(
-            "### Transaction Information"
-        )
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-
-            time_value = st.number_input(
-                "Time (seconds)",
-                min_value=0.0,
-                max_value=200000.0,
-                value=50000.0,
-                step=100.0
-            )
-
-        with c2:
-
-            amount = st.number_input(
-                "Transaction Amount ($)",
-                min_value=0.0,
-                max_value=30000.0,
-                value=100.0,
-                step=0.01
-            )
-
-        st.markdown(
-            "### PCA Features V1 – V28"
-        )
-
-        st.caption(
-            "Default values are 0.0. "
-            "For a demonstration fraud example, you can modify selected features."
-        )
-
-        v_features = []
-
-        feature_groups = [
-            list(
-                range(1, 29)
-            )[i:i + 4]
-            for i in range(
-                0,
-                28,
-                4
-            )
+        model_options = [
+            "Logistic Regression",
+            "Random Forest",
+            "XGBoost",
+            "LightGBM",
+            "Isolation Forest"
         ]
 
-        for group in feature_groups:
+        selected_model = st.selectbox(
+            "Select Model",
+            model_options,
+            index=1
+        )
 
-            columns = st.columns(4)
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    🧠 Input Transaction Features
+                </div>
 
-            for column, feature_number in zip(
-                columns,
-                group
-            ):
+                <div class="info-card-text">
+                    Enter values for the transaction. The anonymized V
+                    features correspond to the original dataset's
+                    PCA-transformed attributes.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-                value = column.number_input(
-                    f"V{feature_number}",
+        amount = st.number_input(
+            "Transaction Amount",
+            min_value=0.0,
+            value=100.0,
+            step=1.0
+        )
+
+        time_value = st.number_input(
+            "Transaction Time",
+            min_value=0.0,
+            value=10000.0,
+            step=100.0
+        )
+
+        st.markdown("### PCA Features")
+
+        feature_inputs = {}
+
+        cols = st.columns(4)
+
+        for i in range(1, 29):
+
+            with cols[(i - 1) % 4]:
+
+                feature_inputs[
+                    f"V{i}"
+                ] = st.number_input(
+                    f"V{i}",
                     value=0.0,
-                    format="%.4f",
-                    key=f"feature_{feature_number}"
+                    format="%.6f",
+                    key=f"single_v_{i}"
                 )
-
-                v_features.append(
-                    value
-                )
-
-        st.markdown("---")
 
         if st.button(
-            "🔍 Predict Fraud Risk",
-            type="primary",
+            "🔍 Analyze Transaction",
             use_container_width=True
         ):
 
-            with st.spinner(
-                "Analyzing transaction..."
-            ):
+            input_data = {
+                "Time": time_value,
+                "Amount": amount
+            }
 
-                try:
+            input_data.update(
+                feature_inputs
+            )
 
-                    prediction_result = (
-                        predict_single(
-                            selected_model,
-                            time_value,
-                            v_features,
-                            amount
-                        )
-                    )
+            try:
 
-                except Exception as error:
+                result = predict_transaction(
+                    input_data,
+                    selected_model
+                )
 
-                    st.error(
-                        f"Prediction error: {error}"
-                    )
-
-                    st.stop()
-
-            probability = (
-                prediction_result[
+                probability = result[
                     "probability"
                 ]
-            )
 
-            risk_level = (
-                prediction_result[
-                    "risk_level"
-                ]
-            )
-
-            prediction = (
-                prediction_result[
+                prediction = result[
                     "prediction"
                 ]
-            )
 
-            risk_color = (
-                prediction_result[
-                    "risk_color"
+                level = result[
+                    "risk_level"
                 ]
-            )
 
-            st.markdown(
-                '<div class="prediction-card">',
-                unsafe_allow_html=True
-            )
+                st.markdown("---")
 
-            st.markdown(
-                "### Prediction Result"
-            )
+                c1, c2, c3 = st.columns(3)
 
-            r1, r2, r3 = st.columns(3)
+                with c1:
 
-            r1.metric(
-                "Fraud Score",
-                f"{probability:.4f}"
-            )
+                    st.metric(
+                        "Fraud Probability",
+                        f"{probability * 100:.2f}%"
+                    )
 
-            r2.metric(
-                "Risk Percentage",
-                f"{probability * 100:.2f}%"
-            )
+                with c2:
 
-            r3.metric(
-                "Risk Level",
-                risk_level
-            )
+                    st.metric(
+                        "Prediction",
+                        "FRAUD" if prediction else "LEGITIMATE"
+                    )
 
-            if prediction == 1:
+                with c3:
 
-                st.error(
-                    "⚠️ FRAUD DETECTED — Transaction flagged for review."
-                )
+                    st.metric(
+                        "Risk Level",
+                        level
+                    )
 
-            else:
+                if prediction == 1:
 
-                st.success(
-                    "✓ LEGITIMATE — Transaction classified as non-fraudulent."
-                )
-
-            st.markdown(
-                "</div>",
-                unsafe_allow_html=True
-            )
-
-            # -----------------------------------------------------------------
-            # GAUGE
-            # -----------------------------------------------------------------
-
-            gauge = go.Figure(
-                go.Indicator(
-                    mode="gauge+number",
-                    value=probability * 100,
-                    number={
-                        "suffix": "%",
-                        "font": {
-                            "size": 32
-                        }
-                    },
-                    gauge={
-                        "axis": {
-                            "range": [
-                                0,
-                                100
-                            ]
-                        },
-
-                        "bar": {
-                            "color": risk_color
-                        },
-
-                        "steps": [
-                            {
-                                "range": [
-                                    0,
-                                    30
-                                ],
-                                "color":
-                                    "#DCFCE7"
-                            },
-                            {
-                                "range": [
-                                    30,
-                                    60
-                                ],
-                                "color":
-                                    "#FEF3C7"
-                            },
-                            {
-                                "range": [
-                                    60,
-                                    80
-                                ],
-                                "color":
-                                    "#FFEDD5"
-                            },
-                            {
-                                "range": [
-                                    80,
-                                    100
-                                ],
-                                "color":
-                                    "#FEE2E2"
-                            }
-                        ],
-
-                        "threshold": {
-                            "line": {
-                                "color":
-                                    "#991B1B",
-                                "width": 3
-                            },
-                            "thickness": 0.75,
-                            "value": 50
-                        }
-                    },
-
-                    title={
-                        "text":
-                            "Transaction Risk Score"
-                    }
-                )
-            )
-
-            gauge.update_layout(
-                height=320,
-                paper_bgcolor="white"
-            )
-
-            st.plotly_chart(
-                gauge,
-                use_container_width=True
-            )
-
-            # -----------------------------------------------------------------
-            # RISK INTERPRETATION
-            # -----------------------------------------------------------------
-
-            st.markdown(
-                "### Risk Interpretation"
-            )
-
-            risk_info = [
-                (
-                    "LOW RISK",
-                    "< 30%",
-                    "Low fraud score."
-                ),
-                (
-                    "MEDIUM RISK",
-                    "30–60%",
-                    "Suspicious transaction requiring review."
-                ),
-                (
-                    "HIGH RISK",
-                    "60–80%",
-                    "Strong fraud indicators detected."
-                ),
-                (
-                    "CRITICAL RISK",
-                    "> 80%",
-                    "Very high fraud score requiring investigation."
-                )
-            ]
-
-            for level, range_text, description in risk_info:
-
-                if level == risk_level:
-
-                    st.success(
-                        f"**{level}** ({range_text}) — "
-                        f"{description}"
+                    st.error(
+                        f"⚠️ {level}: Potential fraudulent transaction detected."
                     )
 
                 else:
 
-                    st.markdown(
-                        f"**{level}** ({range_text}) — "
-                        f"{description}"
+                    st.success(
+                        f"✅ {level}: Transaction classified as legitimate."
                     )
 
-    # =========================================================================
-    # PAGE 6 - BATCH PREDICTION
-    # =========================================================================
+                st.info(
+                    result["description"]
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Prediction failed: {e}"
+                )
+
+    # ========================================================
+    # BATCH PREDICTION
+    # ========================================================
 
     elif page == "Batch Prediction":
 
         st.markdown(
-            '<div class="section-header">Batch CSV Fraud Prediction</div>',
+            """
+            <div class="main-title">
+                Batch Prediction
+            </div>
+
+            <div class="main-subtitle">
+                Analyze multiple transactions at once
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
-        if not models_ready():
-
-            st.error(
-                "Models are not available."
-            )
-
-            st.stop()
-
-        available_models = (
-            list_trained_models()
+        selected_model = st.selectbox(
+            "Select Model",
+            [
+                "Logistic Regression",
+                "Random Forest",
+                "XGBoost",
+                "LightGBM",
+                "Isolation Forest"
+            ],
+            index=1,
+            key="batch_model"
         )
-
-        col1, col2 = st.columns(
-            [2, 3]
-        )
-
-        with col1:
-
-            batch_model = st.selectbox(
-                "Select Model",
-                available_models,
-                index=(
-                    available_models.index(
-                        "XGBoost"
-                    )
-                    if "XGBoost"
-                    in available_models
-                    else 0
-                ),
-                key="batch_model"
-            )
-
-        with col2:
-
-            st.info(
-                "CSV must contain Time, V1–V28 and Amount columns."
-            )
 
         uploaded_file = st.file_uploader(
-            "Upload Transaction CSV",
+            "Upload CSV File",
             type=["csv"]
         )
 
@@ -3868,391 +2671,204 @@ def run_streamlit_app():
 
             try:
 
-                uploaded_df = pd.read_csv(
+                batch_df = pd.read_csv(
                     uploaded_file
                 )
 
-                st.success(
-                    "Loaded %s rows × %s columns"
-                    % (
-                        f"{len(uploaded_df):,}",
-                        len(uploaded_df.columns)
-                    )
-                )
-
-                required_columns = (
-                    ["Time"]
-                    + [
-                        f"V{i}"
-                        for i in range(1, 29)
-                    ]
-                    + ["Amount"]
-                )
-
-                missing_columns = [
-                    column
-                    for column in required_columns
-                    if column
-                    not in uploaded_df.columns
-                ]
-
-                if missing_columns:
-
-                    st.error(
-                        "Missing columns: "
-                        + str(
-                            missing_columns
-                        )
-                    )
-
-                    st.stop()
-
                 st.markdown(
-                    "### Input Preview"
+                    "### Uploaded Data"
                 )
 
                 st.dataframe(
-                    uploaded_df.head(10),
+                    batch_df.head(20),
                     use_container_width=True
                 )
 
                 if st.button(
                     "🚀 Run Batch Prediction",
-                    type="primary",
                     use_container_width=True
                 ):
 
-                    with st.spinner(
-                        "Analyzing uploaded transactions..."
-                    ):
-
-                        output_df = (
-                            predict_batch_df(
-                                batch_model,
-                                uploaded_df
-                            )
-                        )
-
-                    fraud_count = int(
-                        (
-                            output_df[
-                                "prediction"
-                            ] == 1
-                        ).sum()
+                    result_df = batch_predict(
+                        batch_df,
+                        selected_model
                     )
 
-                    legitimate_count = (
-                        len(output_df)
-                        - fraud_count
-                    )
-
-                    fraud_rate = (
-                        100
-                        * fraud_count
-                        / len(output_df)
-                    )
-
-                    st.markdown(
-                        "### Batch Analysis Summary"
-                    )
-
-                    b1, b2, b3, b4 = st.columns(4)
-
-                    b1.metric(
-                        "Total Transactions",
-                        f"{len(output_df):,}"
-                    )
-
-                    b2.metric(
-                        "Fraud Flagged",
-                        f"{fraud_count:,}"
-                    )
-
-                    b3.metric(
-                        "Legitimate",
-                        f"{legitimate_count:,}"
-                    )
-
-                    b4.metric(
-                        "Fraud Rate",
-                        f"{fraud_rate:.2f}%"
-                    )
-
-                    risk_counts = (
-                        output_df[
-                            "risk_level"
-                        ].value_counts()
-                    )
-
-                    fig_risk = go.Figure(
-                        go.Bar(
-                            x=risk_counts.index.tolist(),
-                            y=risk_counts.values.tolist(),
-                            text=risk_counts.values.tolist(),
-                            textposition="outside",
-                            marker_color=[
-                                "#16A34A",
-                                "#D97706",
-                                "#EA580C",
-                                "#DC2626"
-                            ][:len(
-                                risk_counts
-                            )]
-                        )
-                    )
-
-                    fig_risk.update_layout(
-                        title="Risk Level Distribution",
-                        yaxis_title="Transaction Count",
-                        height=380,
-                        paper_bgcolor="white",
-                        plot_bgcolor="white"
-                    )
-
-                    st.plotly_chart(
-                        fig_risk,
-                        use_container_width=True
+                    st.success(
+                        "Batch prediction completed successfully."
                     )
 
                     st.markdown(
                         "### Prediction Results"
                     )
 
-                    display_columns = [
-                        "Time",
-                        "Amount",
-                        "fraud_probability",
-                        "prediction",
-                        "risk_level"
-                    ]
-
-                    if "Class" in output_df.columns:
-
-                        display_columns.insert(
-                            2,
-                            "Class"
-                        )
-
                     st.dataframe(
-                        output_df[
-                            display_columns
-                        ].head(100),
-                        use_container_width=True,
-                        hide_index=True
+                        result_df,
+                        use_container_width=True
                     )
 
-                    csv_data = (
-                        output_df
-                        .to_csv(
-                            index=False
-                        )
-                        .encode(
-                            "utf-8"
-                        )
+                    csv_data = result_df.to_csv(
+                        index=False
+                    ).encode(
+                        "utf-8"
                     )
 
                     st.download_button(
-                        "⬇️ Download Prediction Results",
+                        "⬇️ Download Results CSV",
                         data=csv_data,
                         file_name="fraud_predictions.csv",
                         mime="text/csv",
                         use_container_width=True
                     )
 
-            except Exception as error:
+            except Exception as e:
 
                 st.error(
-                    f"Batch prediction error: {error}"
+                    f"Batch prediction failed: {e}"
                 )
 
-    # =========================================================================
-    # PAGE 7 - ABOUT
-    # =========================================================================
+        else:
+
+            st.info(
+                "Upload a CSV file containing transaction features "
+                "to generate batch fraud predictions."
+            )
+
+    # ========================================================
+    # ABOUT
+    # ========================================================
 
     elif page == "About":
 
         st.markdown(
-            '<div class="section-header">About the Project</div>',
+            """
+            <div class="main-title">
+                About the Project
+            </div>
+
+            <div class="main-subtitle">
+                AI-Powered Financial Fraud Detection & Risk Analytics System
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
         st.markdown(
             """
-            <div class="hero">
-                <div class="hero-title">
-                    AI-Powered Financial Fraud Detection
+            <div class="info-card">
+                <div class="info-card-title">
+                    🎯 Project Objective
                 </div>
 
-                <div class="hero-subtitle">
-                    A machine learning system for detecting
-                    suspicious credit card transactions and
-                    presenting transaction risk analytics.
+                <div class="info-card-text">
+                    The objective of this project is to develop a machine
+                    learning-based fraud detection system capable of
+                    identifying suspicious financial transactions under
+                    severe class imbalance.
                 </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        col1, col2 = st.columns(
-            [2, 1]
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    🛠️ Technology Stack
+                </div>
+
+                <div class="info-card-text">
+                    Python • Pandas • NumPy • Scikit-learn •
+                    XGBoost • LightGBM • Imbalanced-learn •
+                    Matplotlib • Seaborn • Streamlit
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
         )
 
-        with col1:
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    🔬 Machine Learning Approach
+                </div>
 
-            st.markdown(
-                "### Project Overview"
-            )
+                <div class="info-card-text">
+                    The project combines supervised classification models
+                    with an unsupervised anomaly detection approach.
+                    SMOTE is applied only to the training data to address
+                    severe class imbalance while preserving the original
+                    test distribution.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-            st.write(
-                "This project uses the Kaggle Credit Card Fraud "
-                "Detection dataset to build a machine learning "
-                "pipeline for fraud classification and anomaly "
-                "detection."
-            )
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    📈 Evaluation Strategy
+                </div>
 
-            st.markdown(
-                "### Dataset"
-            )
+                <div class="info-card-text">
+                    Model performance is evaluated using Precision,
+                    Recall, F1 Score, ROC-AUC, PR-AUC and Confusion
+                    Matrices instead of relying only on accuracy.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-            dataset_table = pd.DataFrame(
-                {
-                    "Property": [
-                        "Source",
-                        "Transactions",
-                        "Legitimate",
-                        "Fraudulent",
-                        "Features",
-                        "Target",
-                        "Missing Values"
-                    ],
+        st.markdown(
+            """
+            <div class="info-card">
+                <div class="info-card-title">
+                    ⚠️ Important Dataset Limitation
+                </div>
 
-                    "Value": [
-                        "Kaggle — ULB Machine Learning Group",
-                        "283,726 after deduplication",
-                        "283,253",
-                        "473",
-                        "Time, V1–V28, Amount",
-                        "Class",
-                        "None"
-                    ]
-                }
-            )
+                <div class="info-card-text">
+                    The dataset contains anonymized PCA features and does
+                    not contain typical customer information such as names,
+                    merchant categories, locations or demographic details.
+                    Therefore, the application does not claim to perform
+                    customer profiling or merchant-specific fraud analysis.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-            st.dataframe(
-                dataset_table,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.markdown(
-                "### Machine Learning Pipeline"
-            )
-
-            pipeline_steps = [
-                "1. Load and clean the dataset",
-                "2. Remove exact duplicate transactions",
-                "3. Engineer Amount_log and Hour features",
-                "4. Perform stratified 80/20 train-test split",
-                "5. Apply RobustScaler using training data only",
-                "6. Apply SMOTE only to the training set",
-                "7. Train five machine learning models",
-                "8. Evaluate using Precision, Recall, F1, ROC-AUC and PR-AUC",
-                "9. Save trained models and evaluation artifacts",
-                "10. Provide interactive Streamlit prediction interface"
-            ]
-
-            for step in pipeline_steps:
-
-                st.markdown(
-                    f"**{step}**"
-                )
-
-            st.markdown(
-                "### Technology Stack"
-            )
-
-            st.write(
-                "Python • pandas • NumPy • scikit-learn • "
-                "imbalanced-learn • XGBoost • LightGBM • "
-                "Streamlit • Plotly • Matplotlib • Seaborn • joblib"
-            )
-
-        with col2:
-
-            st.markdown(
-                "### Model Results"
-            )
-
-            if results:
-
-                for result in results:
-
-                    with st.expander(
-                        result["model_name"]
-                    ):
-
-                        st.metric(
-                            "F1 Score",
-                            f"{result['f1']:.4f}"
-                        )
-
-                        st.write(
-                            "Precision: "
-                            f"{result['precision']:.4f}"
-                        )
-
-                        st.write(
-                            "Recall: "
-                            f"{result['recall']:.4f}"
-                        )
-
-                        st.write(
-                            "ROC-AUC: "
-                            f"{result['roc_auc']:.4f}"
-                        )
-
-                        st.write(
-                            "PR-AUC: "
-                            f"{result['pr_auc']:.4f}"
-                        )
-
-            st.markdown(
-                "### Run Commands"
-            )
-
-            st.code(
-                "python SalapareddiLaxmana_FinancialFraudDetection.py",
-                language="bash"
-            )
-
-            st.code(
-                "streamlit run SalapareddiLaxmana_FinancialFraudDetection.py",
-                language="bash"
-            )
+        st.markdown(
+            """
+            <div class="footer">
+                AI-Powered Financial Fraud Detection & Risk Analytics System
+                <br>
+                Developed as an academic machine learning project
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
-# =============================================================================
-# SECTION 8 - ENTRY POINT
-# =============================================================================
+# ============================================================
+# MAIN ENTRY POINT
+# ============================================================
 
-_streamlit_mode = (
-    "streamlit"
-    in sys.modules
-)
+if __name__ == "__main__":
 
-if _streamlit_mode:
-
-    run_streamlit_app()
-
-elif __name__ == "__main__":
-
-    if (
-        len(sys.argv) > 1
-        and sys.argv[1] == "--app"
-    ):
+    if "streamlit" in sys.modules:
 
         run_streamlit_app()
 
     else:
+
+        print(
+            "\nStarting model training pipeline...\n"
+        )
 
         run_training_pipeline()
