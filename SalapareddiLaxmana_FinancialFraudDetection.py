@@ -1181,6 +1181,10 @@ def run_streamlit_app():
 
     # ========================================================
     # PROFESSIONAL DARK UI
+
+
+    # ========================================================
+    # HIGH-CONTRAST PROFESSIONAL DARK UI
     # ========================================================
 
     st.markdown(
@@ -1188,195 +1192,213 @@ def run_streamlit_app():
         <style>
 
         /* ====================================================
-           GLOBAL BACKGROUND
+           GLOBAL BACKGROUND & TYPOGRAPHY
         ==================================================== */
 
         .stApp {
-            background:
-                radial-gradient(
-                    circle at top right,
-                    #123B5D 0%,
-                    #071A2B 35%,
-                    #020B14 100%
-                );
-            color: #FFFFFF;
+            background: #090D16 !important;
+            color: #F8FAFC !important;
         }
 
         [data-testid="stAppViewContainer"] {
-            background:
-                linear-gradient(
-                    135deg,
-                    #020B14 0%,
-                    #071A2B 45%,
-                    #0A2238 100%
-                );
+            background: #090D16 !important;
         }
 
         [data-testid="stHeader"] {
-            background: rgba(0, 0, 0, 0.35);
+            background: rgba(15, 23, 42, 0.8) !important;
+            backdrop-filter: blur(8px);
         }
 
+        html, body, [class*="css"] {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        }
+
+        p, span, label, li {
+            color: #E2E8F0 !important;
+        }
+
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li {
+            color: #E2E8F0 !important;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: 40px !important; }
+        h2 { font-size: 30px !important; }
+        h3 { font-size: 22px !important; }
+        h4 { font-size: 18px !important; }
+
         /* ====================================================
-           SIDEBAR
+           SIDEBAR STYLING
         ==================================================== */
 
         [data-testid="stSidebar"] {
-            background:
-                linear-gradient(
-                    180deg,
-                    #020B14 0%,
-                    #041526 55%,
-                    #061D31 100%
-                );
-            border-right: 1px solid #164A70;
+            background-color: #0F172A !important;
+            border-right: 1px solid #334155 !important;
         }
 
         [data-testid="stSidebar"] * {
             color: #F8FAFC !important;
         }
 
-        [data-testid="stSidebar"] .stRadio label {
+        /* Radio Buttons / Navigation */
+        [data-testid="stSidebar"] .stRadio > label {
+            color: #94A3B8 !important;
+            font-weight: 700 !important;
+            text-transform: uppercase;
+            font-size: 12px !important;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
+            background: #1E293B;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+            transition: all 0.2s ease;
+        }
+
+        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
+            border-color: #38BDF8 !important;
+            background: #0F172A;
+        }
+
+        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
             color: #FFFFFF !important;
-            font-size: 15px !important;
+            font-size: 14px !important;
             font-weight: 600 !important;
         }
 
-        [data-testid="stSidebar"] .stRadio label:hover {
-            color: #38BDF8 !important;
-        }
-
         /* ====================================================
-           GENERAL TEXT
-        ==================================================== */
-
-        html,
-        body,
-        [class*="css"] {
-            font-family:
-                "Segoe UI",
-                Arial,
-                sans-serif;
-        }
-
-        p,
-        li,
-        span,
-        label {
-            color: #EAF6FF !important;
-        }
-
-        [data-testid="stMarkdownContainer"] p,
-        [data-testid="stMarkdownContainer"] li {
-            color: #EAF6FF !important;
-            font-size: 16px;
-            line-height: 1.65;
-        }
-
-        h1,
-        h2,
-        h3,
-        h4,
-        h5,
-        h6 {
-            color: #FFFFFF !important;
-            font-weight: 800 !important;
-            letter-spacing: 0.2px;
-        }
-
-        h1 {
-            font-size: 42px !important;
-        }
-
-        h2 {
-            font-size: 32px !important;
-        }
-
-        h3 {
-            font-size: 24px !important;
-        }
-
-        h4 {
-            font-size: 20px !important;
-        }
-
-        /* ====================================================
-           MAIN TITLE
+           TITLES & HEADINGS
         ==================================================== */
 
         .main-title {
-            font-size: 46px;
-            font-weight: 900;
+            font-size: 42px;
+            font-weight: 800;
             color: #FFFFFF !important;
-            margin-bottom: 4px;
-            line-height: 1.15;
+            margin-bottom: 6px;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
         }
 
         .main-subtitle {
-            font-size: 18px;
-            color: #A7D8F7 !important;
-            margin-bottom: 25px;
+            font-size: 16px;
+            color: #38BDF8 !important;
+            font-weight: 500;
+            margin-bottom: 28px;
         }
 
         /* ====================================================
-           CARDS
+           CARDS & FACT BOXES
         ==================================================== */
 
         .info-card {
-            background:
-                linear-gradient(
-                    145deg,
-                    #0C2A43,
-                    #071A2B
-                );
-            border: 1px solid #19527A;
-            border-radius: 16px;
-            padding: 22px;
-            margin-bottom: 18px;
-            box-shadow:
-                0 10px 30px rgba(0, 0, 0, 0.35);
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
         }
 
         .info-card-title {
             color: #FFFFFF !important;
-            font-size: 21px;
-            font-weight: 800;
+            font-size: 18px;
+            font-weight: 700;
             margin-bottom: 8px;
         }
 
         .info-card-text {
-            color: #D9F0FF !important;
-            font-size: 16px;
+            color: #94A3B8 !important;
+            font-size: 14px;
             line-height: 1.6;
         }
 
         .metric-card {
-            background:
-                linear-gradient(
-                    145deg,
-                    #0E3554,
-                    #071B2D
-                );
-            border: 1px solid #2472A3;
-            border-radius: 16px;
-            padding: 20px;
-            text-align: center;
-            box-shadow:
-                0 8px 25px rgba(0, 0, 0, 0.30);
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: left;
         }
 
         .metric-label {
-            color: #9EDCFF !important;
-            font-size: 14px;
+            color: #94A3B8 !important;
+            font-size: 12px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.05em;
         }
 
         .metric-value {
             color: #FFFFFF !important;
             font-size: 32px;
-            font-weight: 900;
-            margin-top: 5px;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+
+        .fact-box {
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+
+        .fact-title {
+            color: #38BDF8 !important;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .fact-value {
+            color: #FFFFFF !important;
+            font-size: 26px;
+            font-weight: 800;
+            margin: 6px 0;
+        }
+
+        .fact-description {
+            color: #94A3B8 !important;
+            font-size: 13px;
+        }
+
+        /* ====================================================
+           NATIVE STREAMLIT METRICS
+        ==================================================== */
+
+        [data-testid="stMetric"] {
+            background: #0F172A !important;
+            border: 1px solid #334155 !important;
+            border-radius: 12px !important;
+            padding: 16px !important;
+        }
+
+        [data-testid="stMetricLabel"] {
+            color: #94A3B8 !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            color: #FFFFFF !important;
+            font-size: 28px !important;
+            font-weight: 800 !important;
+        }
+
+        [data-testid="stMetricDelta"] {
+            color: #38BDF8 !important;
         }
 
         /* ====================================================
@@ -1384,34 +1406,35 @@ def run_streamlit_app():
         ==================================================== */
 
         .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-            background: #061522;
-            border-radius: 12px;
-            padding: 7px;
-            border: 1px solid #173E59;
+            gap: 6px;
+            background: #0F172A;
+            border-radius: 10px;
+            padding: 6px;
+            border: 1px solid #334155;
         }
 
         .stTabs [data-baseweb="tab"] {
-            color: #B8DDF2 !important;
+            color: #94A3B8 !important;
             background: transparent;
-            border-radius: 8px;
-            font-weight: 700;
-            font-size: 15px;
-            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 8px 16px;
+            border: none !important;
         }
 
         .stTabs [data-baseweb="tab"]:hover {
             color: #FFFFFF !important;
-            background: #123B5D;
+            background: #1E293B;
         }
 
         .stTabs [aria-selected="true"] {
             color: #FFFFFF !important;
-            background: #126A9C !important;
+            background: #0284C7 !important;
         }
 
         .stTabs [data-baseweb="tab-highlight"] {
-            background: #38BDF8 !important;
+            display: none;
         }
 
         /* ====================================================
@@ -1419,140 +1442,92 @@ def run_streamlit_app():
         ==================================================== */
 
         .stButton > button {
-            background:
-                linear-gradient(
-                    135deg,
-                    #087EA4,
-                    #126A9C
-                );
+            background: #0284C7 !important;
             color: #FFFFFF !important;
-            border: 1px solid #38BDF8;
-            border-radius: 10px;
-            padding: 10px 20px;
-            font-weight: 800;
-            font-size: 15px;
-            min-height: 44px;
+            border: 1px solid #38BDF8 !important;
+            border-radius: 8px !important;
+            padding: 10px 20px !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+            transition: all 0.2s ease !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .stButton > button:hover {
-            background:
-                linear-gradient(
-                    135deg,
-                    #0B9AC6,
-                    #087EA4
-                );
+            background: #0369A1 !important;
+            border-color: #7DD3FC !important;
             color: #FFFFFF !important;
-            border-color: #7DD3FC;
         }
 
         /* ====================================================
-           INPUTS
+           INPUTS, SELECTS & FORM CONTROLS
         ==================================================== */
 
-        input,
-        textarea {
+        input, textarea {
             color: #FFFFFF !important;
-            background-color: #071A2B !important;
-            border: 1px solid #28658A !important;
+            background-color: #0F172A !important;
+            border: 1px solid #334155 !important;
+            border-radius: 8px !important;
         }
 
-        input::placeholder,
-        textarea::placeholder {
-            color: #8DB7CD !important;
+        input:focus, textarea:focus {
+            border-color: #38BDF8 !important;
         }
-
-        [data-baseweb="select"] {
-            background-color: #071A2B !important;
-        }
-
-        [data-baseweb="select"] * {
-            color: #FFFFFF !important;
-        }
-
-        [data-baseweb="input"] {
-            background-color: #071A2B !important;
-        }
-
-        /* ====================================================
-           SELECTBOX
-        ==================================================== */
 
         div[data-baseweb="select"] > div {
-            background-color: #071A2B !important;
-            border-color: #28658A !important;
+            background-color: #0F172A !important;
+            border-color: #334155 !important;
+            border-radius: 8px !important;
+            color: #FFFFFF !important;
         }
 
         div[data-baseweb="select"] span {
             color: #FFFFFF !important;
         }
 
+        /* Popover dropdown menu items */
+        [data-baseweb="popover"] ul {
+            background-color: #0F172A !important;
+            border: 1px solid #334155 !important;
+        }
+
+        [data-baseweb="popover"] li {
+            color: #FFFFFF !important;
+        }
+
+        [data-baseweb="popover"] li:hover {
+            background-color: #1E293B !important;
+        }
+
         /* ====================================================
-           DATAFRAME
+           DATAFRAME & TABLES
         ==================================================== */
 
         [data-testid="stDataFrame"] {
-            border: 1px solid #225B7F;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        [data-testid="stDataFrame"] * {
-            color: #FFFFFF !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
+            background-color: #0F172A !important;
         }
 
         /* ====================================================
-           METRICS
-        ==================================================== */
-
-        [data-testid="stMetric"] {
-            background:
-                linear-gradient(
-                    145deg,
-                    #0C2A43,
-                    #071A2B
-                );
-            border: 1px solid #1F5C83;
-            padding: 18px;
-            border-radius: 14px;
-        }
-
-        [data-testid="stMetricLabel"] {
-            color: #9EDCFF !important;
-            font-weight: 700 !important;
-        }
-
-        [data-testid="stMetricValue"] {
-            color: #FFFFFF !important;
-            font-size: 30px !important;
-            font-weight: 900 !important;
-        }
-
-        [data-testid="stMetricDelta"] {
-            color: #CDEEFF !important;
-        }
-
-        /* ====================================================
-           EXPANDERS
+           EXPANDERS & ALERTS
         ==================================================== */
 
         [data-testid="stExpander"] {
-            background: #071A2B;
-            border: 1px solid #205A7D;
-            border-radius: 12px;
+            background: #0F172A !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
         }
 
         [data-testid="stExpander"] summary {
             color: #FFFFFF !important;
-            font-weight: 800 !important;
+            font-weight: 700 !important;
         }
 
-        /* ====================================================
-           ALERTS
-        ==================================================== */
-
         [data-testid="stAlert"] {
-            border-radius: 12px;
-            border: 1px solid #28658A;
+            background-color: #0F172A !important;
+            border-radius: 10px !important;
+            border: 1px solid #334155 !important;
         }
 
         [data-testid="stAlert"] p {
@@ -1560,50 +1535,36 @@ def run_streamlit_app():
         }
 
         /* ====================================================
-           CODE
+           CODE & FILE UPLOADER
         ==================================================== */
 
         code {
-            color: #BDEBFF !important;
-            background: #061522 !important;
+            color: #38BDF8 !important;
+            background: #0F172A !important;
+            padding: 2px 6px !important;
+            border-radius: 4px !important;
+            border: 1px solid #334155 !important;
         }
 
         pre {
-            background: #030C15 !important;
-            border: 1px solid #194965 !important;
-            border-radius: 10px;
+            background: #0F172A !important;
+            border: 1px solid #334155 !important;
+            border-radius: 8px !important;
         }
-
-        /* ====================================================
-           FILE UPLOADER
-        ==================================================== */
 
         [data-testid="stFileUploader"] {
-            background: #071A2B;
-            border: 1px dashed #3A7EA5;
-            border-radius: 12px;
-            padding: 12px;
+            background: #0F172A !important;
+            border: 2px dashed #334155 !important;
+            border-radius: 10px !important;
+            padding: 16px !important;
         }
 
-        [data-testid="stFileUploader"] * {
-            color: #EAF6FF !important;
+        [data-testid="stFileUploader"]:hover {
+            border-color: #38BDF8 !important;
         }
-
-        /* ====================================================
-           PLOTLY
-        ==================================================== */
-
-        .js-plotly-plot {
-            background: #071A2B !important;
-            border-radius: 12px;
-        }
-
-        /* ====================================================
-           DIVIDERS
-        ==================================================== */
 
         hr {
-            border-color: #205A7D !important;
+            border-color: #334155 !important;
         }
 
         /* ====================================================
@@ -1612,73 +1573,11 @@ def run_streamlit_app():
 
         .footer {
             text-align: center;
-            color: #8FBBD2 !important;
+            color: #64748B !important;
             font-size: 13px;
             margin-top: 40px;
             padding: 20px;
-            border-top: 1px solid #194965;
-        }
-
-        /* ====================================================
-           DATASET FACT BOXES
-        ==================================================== */
-
-        .fact-box {
-            background:
-                linear-gradient(
-                    145deg,
-                    #0B2C47,
-                    #071A2B
-                );
-            border: 1px solid #216589;
-            border-radius: 14px;
-            padding: 20px;
-            min-height: 125px;
-            margin-bottom: 15px;
-        }
-
-        .fact-title {
-            color: #7DD3FC !important;
-            font-size: 14px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-        }
-
-        .fact-value {
-            color: #FFFFFF !important;
-            font-size: 28px;
-            font-weight: 900;
-            margin-top: 8px;
-        }
-
-        .fact-description {
-            color: #C8E8F8 !important;
-            font-size: 14px;
-            margin-top: 4px;
-        }
-
-        /* ====================================================
-           RESPONSIVE
-        ==================================================== */
-
-        @media (max-width: 900px) {
-
-            .main-title {
-                font-size: 34px;
-            }
-
-            h1 {
-                font-size: 32px !important;
-            }
-
-            h2 {
-                font-size: 27px !important;
-            }
-
-            h3 {
-                font-size: 21px !important;
-            }
+            border-top: 1px solid #334155;
         }
 
         </style>
@@ -1693,29 +1592,16 @@ def run_streamlit_app():
     st.sidebar.markdown(
         """
         <div style="
-            text-align:center;
-            padding:15px 5px 25px 5px;
+            text-align: center;
+            padding: 10px 0px 20px 0px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
         ">
-            <div style="
-                font-size:48px;
-                margin-bottom:5px;
-            ">
-                💳
-            </div>
-
-            <div style="
-                font-size:22px;
-                font-weight:900;
-                color:#FFFFFF;
-            ">
+            <div style="font-size: 36px; margin-bottom: 4px;">💳</div>
+            <div style="font-size: 18px; font-weight: 800; color: #FFFFFF;">
                 Fraud Detection AI
             </div>
-
-            <div style="
-                font-size:13px;
-                color:#9EDCFF;
-                margin-top:5px;
-            ">
+            <div style="font-size: 12px; color: #38BDF8; font-weight: 600; margin-top: 2px;">
                 Financial Risk Analytics
             </div>
         </div>
@@ -1724,7 +1610,7 @@ def run_streamlit_app():
     )
 
     page = st.sidebar.radio(
-        "Navigation",
+        "NAVIGATION",
         [
             "Dashboard",
             "Dataset Analysis",
@@ -1736,38 +1622,23 @@ def run_streamlit_app():
         ]
     )
 
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
     st.sidebar.markdown(
         """
         <div style="
-            background:#071A2B;
-            border:1px solid #1C526F;
-            border-radius:12px;
-            padding:15px;
+            background: #1E293B;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 14px;
         ">
-            <div style="
-                color:#7DD3FC;
-                font-weight:800;
-                font-size:13px;
-            ">
-                PROJECT
+            <div style="color: #38BDF8; font-weight: 800; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;">
+                PROJECT OVERVIEW
             </div>
-
-            <div style="
-                color:#FFFFFF;
-                font-size:15px;
-                font-weight:700;
-                margin-top:5px;
-            ">
-                AI-Powered Financial Fraud Detection
+            <div style="color: #FFFFFF; font-size: 14px; font-weight: 700; margin-top: 4px;">
+                AI Financial Fraud Detection
             </div>
-
-            <div style="
-                color:#A7D8F7;
-                font-size:12px;
-                margin-top:8px;
-            ">
+            <div style="color: #94A3B8; font-size: 12px; margin-top: 6px; line-height: 1.4;">
                 Machine Learning • Risk Analytics • Streamlit
             </div>
         </div>
