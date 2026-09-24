@@ -1079,7 +1079,6 @@ td {
                     unsafe_allow_html=True)
 
         if not models_ready():
-            st.error("Run `python SalapareddiLaxmana_FinancialFraudDetection.py` first.")
             st.stop()
 
         available = list_trained_models()
