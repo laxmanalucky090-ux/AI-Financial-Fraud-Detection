@@ -858,7 +858,7 @@ td {
         st.markdown("---")
         if models_ready():
             st.success("Models Ready")
-       else:
+        else:
            st.caption("Kaggle Credit Card Fraud Detection")
 
     stats   = _load_stats()
