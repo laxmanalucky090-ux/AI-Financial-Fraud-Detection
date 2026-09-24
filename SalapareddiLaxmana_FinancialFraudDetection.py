@@ -1,6 +1,6 @@
 """
 SalapareddiLaxmana_FinancialFraudDetection.py
-==============================================
+==========================
 AI-Powered Financial Fraud Detection and Risk Analytics System
 Using Machine Learning on the Kaggle Credit Card Fraud Detection Dataset
 
@@ -573,19 +573,98 @@ def run_streamlit_app():
 
     # ── CSS ───────────────────────────────────────────────────────────────────
     st.markdown("""
-    <style>
-    section[data-testid="stSidebar"] { background: #1a1f2e; }
-    section[data-testid="stSidebar"] * { color: #e8eaf6 !important; }
-    div[data-testid="metric-container"] {
-        background:#f8f9fa; border:1px solid #e9ecef;
-        border-radius:8px; padding:14px;
-    }
-    .section-header {
-        font-size:1.3rem; font-weight:700; color:#1a1f2e;
-        border-left:4px solid #3b82f6; padding-left:10px; margin-bottom:1rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+
+/* Force a light theme regardless of the browser/OS dark-mode setting */
+:root {
+    color-scheme: light;
+}
+
+/* Main application background */
+.stApp {
+    background-color: #ffffff !important;
+}
+
+/* Force dark, readable text everywhere in the main content area */
+.main, .block-container,
+.main p, .main span, .main li, .main label, .main div,
+.main h1, .main h2, .main h3, .main h4, .main h5, .main h6,
+[data-testid="stMarkdownContainer"],
+[data-testid="stMarkdownContainer"] * ,
+[data-testid="stText"],
+[data-testid="stCaptionContainer"],
+[data-testid="stMetricLabel"],
+[data-testid="stMetricValue"],
+[data-testid="stMetricDelta"],
+[data-testid="stWidgetLabel"],
+[data-testid="stExpander"] summary,
+.stSelectbox label, .stNumberInput label, .stRadio label,
+.stDataFrame, .stTable {
+    color: #111827 !important;
+}
+
+/* Inputs, selects and their inner text */
+[data-testid="stSelectbox"] div, [data-testid="stNumberInput"] input {
+    color: #111827 !important;
+    background-color: #ffffff !important;
+}
+
+/* Sidebar (kept dark, with light text) */
+section[data-testid="stSidebar"] {
+    background-color: #1a1f2e !important;
+}
+
+section[data-testid="stSidebar"] * {
+    color: #e8eaf6 !important;
+}
+
+/* Sidebar radio buttons */
+section[data-testid="stSidebar"] [role="radiogroup"] label {
+    color: #e8eaf6 !important;
+}
+
+/* Metric cards */
+div[data-testid="metric-container"] {
+    background-color: #f8f9fa !important;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 14px;
+}
+
+/* Section headings */
+.section-header {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #111827 !important;
+    background-color: #ffffff;
+    border-left: 4px solid #3b82f6;
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 1rem;
+}
+
+/* Sub-headings */
+h3, h4 {
+    color: #111827 !important;
+}
+
+/* Horizontal separators */
+hr {
+    border-color: #e5e7eb !important;
+}
+
+/* Tabs */
+[data-testid="stTabs"] button {
+    color: #111827 !important;
+}
+
+/* Alerts (info/warning/success/error) keep readable text on their own tint */
+[data-testid="stAlert"] p {
+    color: #111827 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
     # ── Cached loaders ────────────────────────────────────────────────────────
     @st.cache_resource
