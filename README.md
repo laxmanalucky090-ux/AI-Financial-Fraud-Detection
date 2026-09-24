@@ -434,7 +434,7 @@ The pipeline performs:
 Run:
 
 ```bash
-streamlit run SalapareddiLaxmana_FinancialFraudDetection.py -- --app
+streamlit run SalapareddiLaxmana_FinancialFraudDetection.py
 ```
 
 The application opens in the browser and provides the interactive fraud detection dashboard.
