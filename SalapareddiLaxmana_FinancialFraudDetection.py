@@ -575,89 +575,179 @@ def run_streamlit_app():
     st.markdown("""
 <style>
 
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
 /* Force a light theme regardless of the browser/OS dark-mode setting */
 :root {
     color-scheme: light;
 }
 
-/* Whole app background */
+/* ---------- BASE ---------- */
 html, body, .stApp {
-    background-color: #ffffff !important;
+    background-color: #f4f6fb !important;
 }
 
-/* BULLETPROOF RULE: make absolutely everything dark text by default.
-   This does not depend on any specific Streamlit class name, so it
-   cannot silently miss an element the way targeted selectors can. */
 * {
-    color: #111111 !important;
+    font-family: 'Poppins', 'Segoe UI', sans-serif !important;
+    color: #1e2333 !important;
 }
 
-/* Now explicitly re-light only the sidebar (it has a dark background) */
-section[data-testid="stSidebar"],
-section[data-testid="stSidebar"] * {
-    color: #f5f5f5 !important;
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 3rem !important;
 }
 
+/* ---------- SIDEBAR ---------- */
 section[data-testid="stSidebar"] {
-    background-color: #1a1f2e !important;
+    background: linear-gradient(180deg, #10152b 0%, #1b2244 100%) !important;
+    border-right: 1px solid #2a2f52;
 }
 
-/* Metric cards */
-div[data-testid="metric-container"] {
-    background-color: #f8f9fa !important;
-    border: 1px solid #e9ecef;
+section[data-testid="stSidebar"] * {
+    color: #e7e9f5 !important;
+}
+
+section[data-testid="stSidebar"] h2 {
+    font-weight: 800 !important;
+    letter-spacing: 0.3px;
+    font-size: 1.25rem !important;
+    color: #ffffff !important;
+}
+
+section[data-testid="stSidebar"] [role="radiogroup"] label {
+    padding: 6px 10px;
     border-radius: 8px;
-    padding: 14px;
+    margin-bottom: 2px;
+    transition: background-color 0.15s ease;
 }
 
-/* st.metric() internals need direct, high-priority targeting —
-   their built-in styling is more specific than a plain "*" rule */
+section[data-testid="stSidebar"] [role="radiogroup"] label:hover {
+    background-color: rgba(255,255,255,0.08);
+}
+
+/* ---------- HEADINGS ---------- */
+h1, h2, h3, h4, h5, h6 {
+    color: #12172b !important;
+    font-weight: 700 !important;
+}
+
+.section-header {
+    font-size: 1.45rem;
+    font-weight: 800 !important;
+    color: #12172b !important;
+    background: #ffffff;
+    border-left: 6px solid #4f46e5;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* ---------- METRIC CARDS ---------- */
+div[data-testid="metric-container"] {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7f0;
+    border-radius: 14px;
+    padding: 18px 16px !important;
+    box-shadow: 0 2px 8px rgba(30, 35, 70, 0.06);
+}
+
 [data-testid="stMetricValue"],
 [data-testid="stMetricValue"] div {
-    color: #111111 !important;
-    font-weight: 700 !important;
+    color: #12172b !important;
+    font-weight: 800 !important;
+    font-size: 1.6rem !important;
 }
 
 [data-testid="stMetricLabel"],
 [data-testid="stMetricLabel"] p,
 [data-testid="stMetricLabel"] div {
-    color: #4b5563 !important;
+    color: #6b7280 !important;
     font-weight: 600 !important;
+    font-size: 0.85rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
 }
 
 [data-testid="stMetricDelta"],
 [data-testid="stMetricDelta"] div {
-    color: #111111 !important;
+    color: #12172b !important;
+    font-weight: 600 !important;
 }
 
 [data-testid="stMetricDelta"] svg {
-    fill: #111111 !important;
+    fill: #4f46e5 !important;
 }
 
-/* Section headings */
-.section-header {
-    font-size: 1.3rem;
-    font-weight: 700;
-    background-color: #ffffff;
-    border-left: 4px solid #3b82f6;
-    border-radius: 4px;
-    padding: 10px 12px;
-    margin-bottom: 1rem;
+/* ---------- TABS ---------- */
+[data-testid="stTabs"] button {
+    font-weight: 600 !important;
+    color: #6b7280 !important;
 }
 
-/* Horizontal separators */
-hr {
-    border-color: #cccccc !important;
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #4f46e5 !important;
+    border-bottom-color: #4f46e5 !important;
 }
 
-/* Buttons: keep readable white text on colored buttons */
+/* ---------- DATAFRAMES / TABLES ---------- */
+[data-testid="stDataFrame"] {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+/* ---------- BUTTONS ---------- */
+button[kind="primary"] {
+    background: linear-gradient(135deg, #4f46e5, #4338ca) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35);
+}
+
 button[kind="primary"], button[kind="primary"] * {
     color: #ffffff !important;
 }
 
-/* Code blocks: keep their own light-on-dark styling readable */
+button[kind="secondary"] {
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+}
+
+/* ---------- ALERT BOXES (info/success/warning/error) ---------- */
+[data-testid="stAlert"] {
+    border-radius: 10px !important;
+}
+
+/* ---------- SELECTBOX / NUMBER INPUT ---------- */
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+[data-testid="stNumberInput"] input {
+    border-radius: 8px !important;
+    border: 1px solid #d9dcec !important;
+}
+
+/* ---------- EXPANDER ---------- */
+[data-testid="stExpander"] {
+    border-radius: 10px !important;
+    border: 1px solid #e5e7f0 !important;
+    overflow: hidden;
+}
+
+/* ---------- HORIZONTAL RULE ---------- */
+hr {
+    border-color: #e0e2ef !important;
+    margin: 1.4rem 0 !important;
+}
+
+/* ---------- CODE BLOCKS (keep light text on their own dark bg) ---------- */
 [data-testid="stCodeBlock"], [data-testid="stCodeBlock"] * {
     color: #f5f5f5 !important;
+}
+
+/* ---------- CAPTION TEXT ---------- */
+[data-testid="stCaptionContainer"] {
+    color: #6b7280 !important;
 }
 
 </style>
