@@ -1,12 +1,12 @@
 """
-FinancialFraudDetection.py
-==========================
+SalapareddiLaxmana_FinancialFraudDetection.py
+==============================================
 AI-Powered Financial Fraud Detection and Risk Analytics System
 Using Machine Learning on the Kaggle Credit Card Fraud Detection Dataset
 
 Run modes:
-  python FinancialFraudDetection.py        -> train all models, save artifacts
-  streamlit run FinancialFraudDetection.py -> launch interactive web application
+  python SalapareddiLaxmana_FinancialFraudDetection.py        -> train all models, save artifacts
+  streamlit run SalapareddiLaxmana_FinancialFraudDetection.py -> launch interactive web application
 """
 
 # ── Standard library ─────────────────────────────────────────────────────────
@@ -549,7 +549,7 @@ def run_training_pipeline():
     print("\n" + "=" * 60)
     print("  Training complete in %.1f minutes" % ((time.time()-t_total)/60))
     print("  Best model (F1): %s = %.4f" % (best["model_name"], best["f1"]))
-    print("  Launch app : streamlit run FinancialFraudDetection.py")
+    print("  Launch app : streamlit run SalapareddiLaxmana_FinancialFraudDetection.py")
     print("=" * 60)
 
 
@@ -626,7 +626,7 @@ def run_streamlit_app():
         if models_ready():
             st.success("Models Ready")
         else:
-            st.error("Run: python FinancialFraudDetection.py")
+            st.error("Run: python SalapareddiLaxmana_FinancialFraudDetection.py")
         st.caption("Kaggle Credit Card Fraud Detection")
 
     stats   = _load_stats()
@@ -639,7 +639,7 @@ def run_streamlit_app():
         st.markdown('<div class="section-header">Dashboard — Overview</div>', unsafe_allow_html=True)
 
         if not stats:
-            st.warning("Run `python FinancialFraudDetection.py` first.")
+            st.warning("Run `python SalapareddiLaxmana_FinancialFraudDetection.py` first.")
             st.stop()
 
         c1,c2,c3,c4,c5 = st.columns(5)
@@ -848,7 +848,7 @@ def run_streamlit_app():
                     unsafe_allow_html=True)
 
         if not models_ready():
-            st.error("Run `python FinancialFraudDetection.py` first.")
+            st.error("Run `python SalapareddiLaxmana_FinancialFraudDetection.py` first.")
             st.stop()
 
         available = list_trained_models()
@@ -1055,8 +1055,8 @@ credit card transactions from September 2013 (48-hour window).
                         st.write(f"**Precision:** {r['precision']:.4f}")
                         st.write(f"**Recall:** {r['recall']:.4f}")
             st.markdown("---")
-            st.code("python FinancialFraudDetection.py", language="bash")
-            st.code("streamlit run FinancialFraudDetection.py", language="bash")
+            st.code("python SalapareddiLaxmana_FinancialFraudDetection.py", language="bash")
+            st.code("streamlit run SalapareddiLaxmana_FinancialFraudDetection.py", language="bash")
 
 
 # =============================================================================
