@@ -3,8 +3,6 @@ __pycache__/
 assets/
 backend/
 frontend/
-fraud_assets/
-fraud_models/
 models/
 report/
 src/

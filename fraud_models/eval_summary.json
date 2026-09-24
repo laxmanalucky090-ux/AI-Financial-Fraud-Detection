@@ -1,0 +1,92 @@
+[
+  {
+    "model_name": "Logistic Regression",
+    "precision": 0.0532,
+    "recall": 0.8737,
+    "f1": 0.1004,
+    "roc_auc": 0.9599,
+    "pr_auc": 0.6775,
+    "confusion_matrix": [
+      [
+        55175,
+        1476
+      ],
+      [
+        12,
+        83
+      ]
+    ]
+  },
+  {
+    "model_name": "Random Forest",
+    "precision": 0.9268,
+    "recall": 0.8,
+    "f1": 0.8588,
+    "roc_auc": 0.9606,
+    "pr_auc": 0.8288,
+    "confusion_matrix": [
+      [
+        56645,
+        6
+      ],
+      [
+        19,
+        76
+      ]
+    ]
+  },
+  {
+    "model_name": "XGBoost",
+    "precision": 0.6525,
+    "recall": 0.8105,
+    "f1": 0.723,
+    "roc_auc": 0.9775,
+    "pr_auc": 0.8128,
+    "confusion_matrix": [
+      [
+        56610,
+        41
+      ],
+      [
+        18,
+        77
+      ]
+    ]
+  },
+  {
+    "model_name": "LightGBM",
+    "precision": 0.6033,
+    "recall": 0.7684,
+    "f1": 0.6759,
+    "roc_auc": 0.9739,
+    "pr_auc": 0.786,
+    "confusion_matrix": [
+      [
+        56603,
+        48
+      ],
+      [
+        22,
+        73
+      ]
+    ]
+  },
+  {
+    "model_name": "Isolation Forest",
+    "precision": 0.2353,
+    "recall": 0.2947,
+    "f1": 0.2617,
+    "roc_auc": 0.939,
+    "pr_auc": 0.1616,
+    "confusion_matrix": [
+      [
+        56560,
+        91
+      ],
+      [
+        67,
+        28
+      ]
+    ]
+  }
+]
