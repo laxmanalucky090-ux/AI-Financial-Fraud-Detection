@@ -753,6 +753,67 @@ def run_streamlit_app():
             text-align: center !important;
             padding: 30px !important;
         }
+        /* ===== ABOUT + CLASS IMBALANCE FIX ===== */
+
+.about-card,
+.about-card *,
+.info-card,
+.info-card *,
+.fact-box,
+.fact-box * {
+    color: #E5E7EB !important;
+}
+
+.about-card h1,
+.about-card h2,
+.about-card h3,
+.info-card h1,
+.info-card h2,
+.info-card h3,
+.fact-box h1,
+.fact-box h2,
+.fact-box h3 {
+    color: #FFFFFF !important;
+}
+
+/* Class Imbalance table */
+[data-testid="stDataFrame"],
+[data-testid="stDataFrame"] *,
+table,
+table *,
+thead,
+tbody,
+tr,
+th,
+td {
+    color: #E5E7EB !important;
+}
+
+th {
+    background-color: #1E293B !important;
+    color: #FFFFFF !important;
+}
+
+td {
+    background-color: #111827 !important;
+    color: #E5E7EB !important;
+}
+
+/* Markdown table */
+.stMarkdown table {
+    background-color: #111827 !important;
+    color: #E5E7EB !important;
+}
+
+.stMarkdown table th {
+    background-color: #1E293B !important;
+    color: #FFFFFF !important;
+}
+
+.stMarkdown table td {
+    background-color: #111827 !important;
+    color: #E5E7EB !important;
+}
 
         </style>
         """,
