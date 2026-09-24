@@ -1,543 +1,571 @@
-# AI-Powered Financial Fraud Detection and Risk Analytics System
+````markdown
+# AI-Powered Financial Fraud Detection & Risk Analytics System
 
-> **IBM SkillsBuild Academic Internship Project**  
-> Flask REST API backend + Streamlit frontend · Machine Learning · Real-time fraud detection
+## 1. Project Overview
 
----
+An end-to-end Machine Learning project for detecting fraudulent credit card transactions using multiple supervised and unsupervised ML algorithms.
 
-## Table of Contents
+The project includes:
 
-1. [Project Title](#1-project-title)
-2. [Project Overview](#2-project-overview)
-3. [Problem Statement](#3-problem-statement)
-4. [What the Project Does](#4-what-the-project-does)
-5. [Frontend and Backend Architecture](#5-frontend-and-backend-architecture)
-6. [Dataset](#6-dataset)
-7. [Dataset Features](#7-dataset-features)
-8. [Machine Learning Models Used](#8-machine-learning-models-used)
-9. [Model Performance](#9-model-performance)
-10. [Technology Stack](#10-technology-stack)
-11. [Project Structure](#11-project-structure)
-12. [Quick Start](#12-quick-start)
-13. [API Endpoints](#13-api-endpoints)
-14. [POST /predict — Example Request](#14-post-predict--example-request)
-15. [Example API Response](#15-example-api-response)
-16. [Frontend Pages](#16-frontend-pages)
-17. [Data Preprocessing](#17-data-preprocessing)
-18. [Data Leakage Prevention](#18-data-leakage-prevention)
-19. [How the ML Pipeline Works](#19-how-the-ml-pipeline-works)
-20. [Limitations](#20-limitations)
-21. [Future Scope](#21-future-scope)
-22. [Conclusion](#22-conclusion)
-23. [Dataset Reference](#23-dataset-reference)
+- Data cleaning and preprocessing
+- Exploratory Data Analysis (EDA)
+- Class imbalance handling using SMOTE
+- Feature engineering
+- Multiple machine learning models
+- Model evaluation using fraud-focused metrics
+- Fraud risk scoring
+- Single transaction prediction
+- Batch transaction prediction
+- Interactive Streamlit dashboard
 
 ---
 
-## 1. Project Title
+## 2. Dataset
 
-**AI-Powered Financial Fraud Detection and Risk Analytics System Using Machine Learning**
+Dataset: **Credit Card Fraud Detection**
 
----
+Source: Kaggle  
+Dataset Link: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
 
-## 2. Project Overview
+Dataset file:
 
-This project is a complete, end-to-end machine learning system for detecting fraudulent credit card transactions in real time. It is built on the Kaggle Credit Card Fraud Detection dataset containing 284,807 real European credit card transactions.
+```text
+creditcard.csv
+````
 
-The system follows a **two-tier architecture**:
-- A **Flask REST API** (backend) that loads trained ML models and serves predictions over HTTP
-- A **Streamlit web application** (frontend) that calls the Flask API and presents results in an interactive dashboard
+Dataset characteristics:
 
-Five machine learning models are trained with strict data-leakage prevention and evaluated against a held-out test set using fraud-specific metrics (F1-Score, ROC-AUC, PR-AUC).
+* 284,807 transactions
+* 31 columns
+* 492 fraud transactions
+* 284,315 legitimate transactions
+* Fraud rate: approximately 0.17%
+* Features: `Time`, `V1`–`V28`, `Amount`, `Class`
+* `Class = 0` → Legitimate transaction
+* `Class = 1` → Fraudulent transaction
+
+The `V1`–`V28` features are anonymized PCA-transformed variables provided by the original dataset.
 
 ---
 
 ## 3. Problem Statement
 
-Credit card fraud causes billions of dollars in annual losses. Key challenges:
+Credit card fraud detection is a highly imbalanced classification problem because fraudulent transactions represent only a very small percentage of all transactions.
 
-- **Extreme class imbalance** — only 0.17% of transactions are fraudulent (~599 legitimate for every 1 fraud). Standard accuracy is meaningless.
-- **Anonymised features** — the 28 PCA components (V1–V28) cannot be traced to original transaction fields due to privacy constraints.
-- **Cost asymmetry** — a missed fraud (false negative) is far more costly than a false alarm (false positive).
-- **Real-time requirement** — fraud screening must happen at transaction time, demanding fast inference.
+The objective of this project is to build a machine learning system that can:
 
----
-
-## 4. What the Project Does
-
-| Capability | Details |
-|-----------|---------|
-| **Train 5 ML models** | Logistic Regression, Random Forest, XGBoost, LightGBM, Isolation Forest |
-| **REST API** | Flask backend exposes `/predict`, `/predict/batch`, `/health`, `/models`, `/stats` |
-| **Interactive UI** | Streamlit frontend with 7 pages; calls the Flask API for predictions |
-| **Single prediction** | Enter Time, V1–V28, Amount → get fraud probability + risk level + gauge chart |
-| **Batch prediction** | Upload CSV → get results table + risk distribution + downloadable CSV |
-| **EDA & Model comparison** | 7 EDA charts + ROC/PR curves + confusion matrices + metrics comparison |
+1. Identify potentially fraudulent transactions.
+2. Reduce false positives while maintaining strong fraud detection.
+3. Compare multiple machine learning algorithms.
+4. Generate fraud probability and risk levels.
+5. Provide an interactive dashboard for analysis and prediction.
 
 ---
 
-## 5. Frontend and Backend Architecture
+## 4. Project Architecture
 
-```
-┌─────────────────────────────────┐        ┌──────────────────────────────────────┐
-│       FRONTEND                  │  HTTP  │        BACKEND                       │
-│   frontend/app.py               │◄──────►│    backend/app.py                    │
-│   Streamlit  (port 8501)        │  JSON  │    Flask REST API  (port 5000)       │
-│                                 │        │                                      │
-│  • Dashboard                    │        │  GET  /health                        │
-│  • Dataset Analysis             │        │  GET  /models                        │
-│  • EDA / Visualizations         │        │  GET  /stats                         │
-│  • Model Performance            │        │  POST /predict                       │
-│  • Fraud Prediction  ──────────────────► │  POST /predict/batch                 │
-│  • Batch Prediction  ──────────────────► │                                      │
-│  • About                        │        │  Loads: scaler.joblib                │
-└─────────────────────────────────┘        │          feature_cols.joblib         │
-                                           │          *.joblib  (5 models)        │
-                                           └──────────────────────────────────────┘
-                                                           │
-                                           ┌──────────────┴───────────────────────┐
-                                           │   fraud_models/  (generated by       │
-                                           │   python FinancialFraudDetection.py) │
-                                           └──────────────────────────────────────┘
+This project uses a **single-file architecture**.
+
+```text
+AI-Financial-Fraud-Detection/
+│
+├── SalapareddiLaxmana_FinancialFraudDetection.py
+├── requirements.txt
+├── README.md
+├── SalapareddiLaxmana_ProjectReport.docx
+├── creditcard.csv
+├── fraud_models/
+└── fraud_assets/
 ```
 
-**Data flows for a prediction:**
-1. User fills in Time, V1–V28, Amount in the Streamlit form
-2. Streamlit sends `POST /predict` JSON to Flask
-3. Flask loads the saved scaler + model, runs inference
-4. Flask returns `{prediction, fraud_probability, risk_level, is_fraud}`
-5. Streamlit displays the result with a risk gauge chart
+The main Python file contains:
+
+* Data loading
+* Data cleaning
+* Feature engineering
+* EDA
+* Preprocessing
+* SMOTE
+* Model training
+* Model evaluation
+* Fraud prediction
+* Batch prediction
+* Streamlit dashboard
 
 ---
 
-## 6. Dataset
+## 5. Machine Learning Models
 
-| Property | Value |
-|----------|-------|
-| Name | Credit Card Fraud Detection |
-| Source | Kaggle — ULB Machine Learning Group (Worldline) |
-| Raw rows | 284,807 |
-| Duplicate rows removed | 1,081 |
-| Rows after deduplication | **283,726** |
-| Fraudulent transactions | 473 (0.1667%) |
-| Legitimate transactions | 283,253 (99.8333%) |
-| Observation window | ~48 hours (September 2013) |
-| Missing values | None |
+The project compares five machine learning approaches:
 
----
+### 1. Logistic Regression
 
-## 7. Dataset Features
+Used as a baseline supervised classification model.
 
-| Feature | Type | Description |
-|---------|------|-------------|
-| `Time` | Float | Seconds elapsed since the first transaction in the dataset (0 – 172,792) |
-| `V1` – `V28` | Float | PCA-transformed, anonymised transaction features (28 components) |
-| `Amount` | Float | Transaction value in euros |
-| `Class` | Integer | **Target** — 0 = Legitimate, 1 = Fraud |
+### 2. Random Forest
 
-> V1–V28 are the result of PCA applied to the original transaction features. The original variables cannot be disclosed due to confidentiality.
+An ensemble tree-based classifier used for robust fraud classification.
 
-**Engineered features (added during preprocessing):**
+### 3. XGBoost
 
-| Feature | Formula | Purpose |
-|---------|---------|---------|
-| `Amount_log` | `log1p(Amount)` | Reduces right-skew; brings amount distribution closer to normal |
-| `Hour` | `(Time // 3600) % 24` | Hour-of-day extracted from elapsed seconds |
+A gradient boosting algorithm designed for high-performance classification.
 
-Model input: **V1–V28 + Amount_log + Hour** (30 features total).
+### 4. LightGBM
+
+A fast gradient boosting framework suitable for large datasets.
+
+### 5. Isolation Forest
+
+An unsupervised anomaly detection algorithm used to identify unusual transactions.
 
 ---
 
-## 8. Machine Learning Models Used
+## 6. Data Preprocessing
 
-| # | Model | Type | Imbalance Handling |
-|---|-------|------|-------------------|
-| 1 | Logistic Regression | Supervised | `class_weight='balanced'` |
-| 2 | Random Forest | Supervised | `class_weight='balanced'` |
-| 3 | XGBoost | Supervised | `scale_pos_weight = neg/pos` |
-| 4 | LightGBM | Supervised | `scale_pos_weight = neg/pos` |
-| 5 | Isolation Forest | Unsupervised | `contamination=0.002` |
+The preprocessing pipeline includes:
 
-All supervised models are trained on the **SMOTE-augmented** training set. Isolation Forest is trained on the original unbalanced training set (anomaly detection does not use labels).
+* Duplicate removal
+* Missing value checking
+* Feature engineering
+* Log transformation of transaction amount
+* Hour extraction from transaction time
+* Stratified train-test split
+* Robust scaling
+* SMOTE oversampling on the training data only
 
----
+### Feature Engineering
 
-## 9. Model Performance
+Two additional features are created:
 
-> All results computed on the held-out test set: **56,746 transactions | 95 fraud | 56,651 legitimate**
-
-| Model | Precision | Recall | F1-Score | ROC-AUC | PR-AUC |
-|-------|:---------:|:------:|:--------:|:-------:|:------:|
-| Logistic Regression | 0.0532 | 0.8737 | 0.1004 | 0.9599 | 0.6775 |
-| **Random Forest** ⭐ | **0.9268** | **0.8000** | **0.8588** | 0.9606 | **0.8288** |
-| XGBoost | 0.6525 | 0.8105 | 0.7230 | **0.9775** | 0.8128 |
-| LightGBM | 0.6033 | 0.7684 | 0.6759 | 0.9739 | 0.7860 |
-| Isolation Forest | 0.2353 | 0.2947 | 0.2617 | 0.9390 | 0.1616 |
-
-⭐ **Best model: Random Forest** (F1 = 0.8588) — default model in the API.
-
-**Confusion matrix highlights:**
-
-| Model | True Negatives | False Positives | False Negatives | True Positives |
-|-------|:--------------:|:---------------:|:---------------:|:--------------:|
-| Logistic Regression | 55,175 | 1,476 | 12 | 83 |
-| **Random Forest** | **56,645** | **6** | 19 | 76 |
-| XGBoost | 56,610 | 41 | 18 | 77 |
-| LightGBM | 56,603 | 48 | 22 | 73 |
-| Isolation Forest | 56,560 | 91 | 67 | 28 |
-
----
-
-## 10. Technology Stack
-
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| Backend API | Flask | ≥ 3.0 |
-| Frontend UI | Streamlit | ≥ 1.32 |
-| HTTP Client | requests | ≥ 2.28 |
-| Language | Python | 3.11 |
-| Data Processing | pandas | ≥ 2.0 |
-| Numerical Computing | NumPy | ≥ 1.24 |
-| Machine Learning | scikit-learn | ≥ 1.4 |
-| Gradient Boosting | XGBoost | ≥ 2.0 |
-| Gradient Boosting | LightGBM | ≥ 4.0 |
-| Oversampling | imbalanced-learn | ≥ 0.11 |
-| Visualisation | Matplotlib + Seaborn | ≥ 3.7 / 0.12 |
-| Interactive Charts | Plotly | ≥ 5.18 |
-| Model Persistence | joblib | ≥ 1.3 |
-| Image Handling | Pillow | ≥ 10.0 |
-
----
-
-## 11. Project Structure
-
+```text
+Amount_log = log1p(Amount)
+Hour = (Time // 3600) % 24
 ```
-Financial_Fraud_Detection_Project/
-│
-├── creditcard.csv                          # Kaggle dataset (required)
-├── FinancialFraudDetection.py              # Training script (run once to train models)
-├── requirements.txt                        # All Python dependencies
-├── README.md                               # This file
-├── FinancialFraudDetection_ProjectReport.docx
-│
-├── backend/
-│   └── app.py                              # Flask REST API
-│
-├── frontend/
-│   └── app.py                              # Streamlit web application
-│
-├── fraud_models/                           # Generated by training script
-│   ├── scaler.joblib
-│   ├── feature_cols.joblib
-│   ├── logistic_regression.joblib
-│   ├── random_forest.joblib
-│   ├── xgboost.joblib
-│   ├── lightgbm.joblib
-│   ├── isolation_forest.joblib
-│   ├── dataset_stats.joblib
-│   └── eval_results.joblib
-│
-└── fraud_assets/                           # Generated by training script
-    ├── eda_class_distribution.png
-    ├── eda_amount_distribution.png
-    ├── eda_time_distribution.png
-    ├── eda_fraud_by_hour.png
-    ├── eda_amount_boxplot.png
-    ├── eda_top_features.png
-    ├── eda_correlation_heatmap.png
-    ├── eval_roc_curves.png
-    ├── eval_pr_curves.png
-    ├── eval_confusion_matrices.png
-    └── eval_metrics_comparison.png
+
+### Class Imbalance
+
+The dataset contains approximately:
+
+```text
+99.83% Legitimate
+0.17% Fraud
+```
+
+After duplicate removal, the dataset contains approximately:
+
+```text
+283,253 legitimate transactions
+473 fraudulent transactions
+```
+
+This is approximately:
+
+```text
+599 legitimate transactions per 1 fraud.
 ```
 
 ---
 
-## 12. Quick Start
+## 7. Model Evaluation Metrics
 
-### Prerequisites
-- Python 3.9 or later
-- `creditcard.csv` in the project root (download from Kaggle)
+Because the dataset is highly imbalanced, accuracy is not used as the primary evaluation metric.
 
-### Install dependencies
+The project evaluates models using:
+
+* Precision
+* Recall
+* F1 Score
+* ROC-AUC
+* PR-AUC
+* Confusion Matrix
+
+### Why these metrics?
+
+**Precision** measures how many predicted fraud transactions are actually fraud.
+
+**Recall** measures how many actual fraud transactions are successfully detected.
+
+**F1 Score** balances precision and recall.
+
+**ROC-AUC** measures the model's overall ranking ability.
+
+**PR-AUC** is especially useful for highly imbalanced fraud detection datasets.
+
+---
+
+## 8. Model Performance
+
+The evaluated model results are:
+
+| Model               | Precision | Recall | F1 Score | ROC-AUC | PR-AUC |
+| ------------------- | --------: | -----: | -------: | ------: | -----: |
+| Logistic Regression |    0.0532 | 0.8737 |   0.1004 |  0.9599 | 0.6775 |
+| Random Forest       |    0.9268 | 0.8000 |   0.8588 |  0.9606 | 0.8288 |
+| XGBoost             |    0.6525 | 0.8105 |   0.7230 |  0.9775 | 0.8128 |
+| LightGBM            |    0.6033 | 0.7684 |   0.6759 |  0.9739 | 0.7860 |
+| Isolation Forest    |    0.2353 | 0.2947 |   0.2617 |  0.9390 | 0.1616 |
+
+
+
+Random Forest achieved an F1 score of approximately **0.8588** in the recorded evaluation.
+
+---
+
+## 9. Random Forest Confusion Matrix
+
+The recorded Random Forest confusion matrix is:
+
+```text
+                 Predicted
+                 Legit   Fraud
+
+Actual Legit     56645      6
+Actual Fraud        19     76
+```
+
+This corresponds to:
+
+* True Negatives = 56,645
+* False Positives = 6
+* False Negatives = 19
+* True Positives = 76
+
+---
+
+## 10. Exploratory Data Analysis
+
+The project generates multiple visualizations including:
+
+1. Class distribution
+2. Transaction amount distribution
+3. Transaction time distribution
+4. Fraud transactions by hour
+5. Transaction amount boxplot
+6. Feature distribution comparison
+7. Correlation heatmap
+
+Generated visualization files are stored in:
+
+```text
+fraud_assets/
+```
+
+---
+
+## 11. Streamlit Dashboard
+
+The project includes an interactive Streamlit application with seven sections:
+
+### 1. Dashboard
+
+Displays:
+
+* Dataset statistics
+* Fraud count
+* Legitimate transaction count
+* Fraud rate
+* Model summary
+
+### 2. Dataset Analysis
+
+Displays:
+
+* Dataset information
+* Class distribution
+* Transaction statistics
+* Fraud vs legitimate comparison
+
+### 3. EDA / Visualizations
+
+Displays generated charts and visual analysis.
+
+### 4. Model Performance
+
+Displays:
+
+* Model comparison
+* Precision
+* Recall
+* F1 Score
+* ROC-AUC
+* PR-AUC
+* Confusion matrices
+* ROC curve
+* Precision-Recall curve
+
+### 5. Fraud Prediction
+
+Allows the user to enter transaction information and receive:
+
+* Fraud probability / anomaly score
+* Prediction
+* Risk level
+
+### 6. Batch Prediction
+
+Allows users to upload a CSV file and generate predictions for multiple transactions.
+
+### 7. About
+
+Provides project information, methodology, models and limitations.
+
+---
+
+## 12. Risk Levels
+
+The application converts model scores into four risk categories:
+
+```text
+Score < 0.30     → LOW
+0.30 - 0.59      → MEDIUM
+0.60 - 0.79      → HIGH
+0.80 - 1.00      → CRITICAL
+```
+
+These thresholds are intended for demonstration and analytical purposes.
+
+---
+
+## 13. Project Structure
+
+```text
+AI-Financial-Fraud-Detection/
+│
+├── SalapareddiLaxmana_FinancialFraudDetection.py
+│   └── Complete ML pipeline and Streamlit application
+│
+├── requirements.txt
+│   └── Python dependencies
+│
+├── README.md
+│   └── Project documentation
+│
+├── SalapareddiLaxmana_ProjectReport.docx
+│   └── Complete project report
+│
+├── creditcard.csv
+│   └── Kaggle dataset
+│
+├── fraud_models/
+│   └── Saved machine learning models and preprocessing objects
+│
+└── fraud_assets/
+    └── Generated charts and evaluation visualizations
+```
+
+---
+
+## 14. Requirements
+
+The project uses the following Python libraries:
+
+```text
+streamlit
+pandas
+numpy
+scikit-learn
+xgboost
+lightgbm
+imbalanced-learn
+matplotlib
+seaborn
+joblib
+plotly
+Pillow
+scipy
+```
+
+The complete dependency list is available in:
+
+```text
+requirements.txt
+```
+
+---
+
+## 15. Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/laxmanalucky090-ux/AI-Financial-Fraud-Detection.git
+```
+
+Move into the project directory:
+
+```bash
+cd AI-Financial-Fraud-Detection
+```
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 1 — Train all models (~5–10 minutes, run once)
+---
+
+## 16. Run the Machine Learning Pipeline
+
+To train the models and generate project artifacts:
 
 ```bash
-python FinancialFraudDetection.py
+python SalapareddiLaxmana_FinancialFraudDetection.py
 ```
 
-This generates `fraud_models/` and `fraud_assets/`.
+The pipeline performs:
 
-### Step 2 — Start the Flask backend
+1. Dataset loading
+2. Duplicate removal
+3. Feature engineering
+4. Exploratory analysis
+5. Train-test split
+6. Feature scaling
+7. SMOTE balancing
+8. Model training
+9. Model evaluation
+10. Evaluation chart generation
+11. Model and artifact saving
+
+---
+
+## 17. Launch the Streamlit Application
+
+Run:
 
 ```bash
-python backend/app.py
+streamlit run SalapareddiLaxmana_FinancialFraudDetection.py -- --app
 ```
 
-Flask starts on **http://localhost:5000**. Keep this terminal open.
-
-### Step 3 — Launch the Streamlit frontend
-
-Open a **new terminal** and run:
-
-```bash
-streamlit run frontend/app.py
-```
-
-Opens at **http://localhost:8501**
+The application opens in the browser and provides the interactive fraud detection dashboard.
 
 ---
 
-## 13. API Endpoints
+## 18. Generated Artifacts
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `GET` | `/health` | Service health check, lists available models | None |
-| `GET` | `/models` | List all trained models | None |
-| `GET` | `/stats` | Dataset statistics (row counts, class distribution, amounts) | None |
-| `POST` | `/predict` | Single transaction fraud prediction | None |
-| `POST` | `/predict/batch` | Batch prediction for up to 10,000 transactions | None |
+After running the project, the following directories are generated:
 
-All endpoints return JSON. Error responses include an `"error"` key.
+```text
+fraud_models/
+```
+
+Contains:
+
+* Trained machine learning models
+* Feature scaler
+* Feature metadata
+* Evaluation results
+
+```text
+fraud_assets/
+```
+
+Contains:
+
+* EDA charts
+* ROC curves
+* Precision-Recall curves
+* Confusion matrices
+* Model comparison charts
 
 ---
 
-## 14. POST /predict — Example Request
+## 19. Important Considerations
 
-**Endpoint:** `POST http://localhost:5000/predict`  
-**Content-Type:** `application/json`
+### Class Imbalance
 
-```json
-{
-    "model":  "Random Forest",
-    "Time":   50000.0,
-    "V1":     0.0,
-    "V2":     0.0,
-    "V3":     0.0,
-    "V4":     0.0,
-    "V5":     0.0,
-    "V6":     0.0,
-    "V7":     0.0,
-    "V8":     0.0,
-    "V9":     0.0,
-    "V10":    0.0,
-    "V11":    0.0,
-    "V12":    0.0,
-    "V13":    0.0,
-    "V14":    0.0,
-    "V15":    0.0,
-    "V16":    0.0,
-    "V17":    0.0,
-    "V18":    0.0,
-    "V19":    0.0,
-    "V20":    0.0,
-    "V21":    0.0,
-    "V22":    0.0,
-    "V23":    0.0,
-    "V24":    0.0,
-    "V25":    0.0,
-    "V26":    0.0,
-    "V27":    0.0,
-    "V28":    0.0,
-    "Amount": 100.0
-}
-```
+Fraud cases represent only a small percentage of transactions. Therefore, model performance should not be judged using accuracy alone.
 
-**Fraud signature example** (V14 = -9.47 is a known fraud indicator):
+### SMOTE
 
-```json
-{
-    "model": "Logistic Regression",
-    "Time": 406.0,
-    "V1": -2.31, "V2": 1.95, "V3": -0.36, "V4": 2.58,
-    "V5": -0.02, "V6": -0.36, "V7": 0.87, "V8": -0.01,
-    "V9": -0.66, "V10": -0.24, "V11": -0.25, "V12": 0.01,
-    "V13": 0.32, "V14": -9.47, "V15": 0.30, "V16": 0.91,
-    "V17": -0.51, "V18": -0.60, "V19": -0.24, "V20": -0.94,
-    "V21": -0.04, "V22": 0.12, "V23": -0.55, "V24": 0.02,
-    "V25": 0.14, "V26": 0.37, "V27": 0.01, "V28": 0.06,
-    "Amount": 1.0
-}
-```
+SMOTE is applied only to the training data to avoid contaminating the test set.
 
-**Required fields:** `Time`, `V1`–`V28`, `Amount`  
-**Optional field:** `model` (defaults to `"Random Forest"`)  
-**Valid model names:** `"Logistic Regression"`, `"Random Forest"`, `"XGBoost"`, `"LightGBM"`, `"Isolation Forest"`
+### Scaling
 
----
+RobustScaler is used because transaction amounts and anonymized features can contain outliers.
 
-## 15. Example API Response
+### PCA Features
 
-**Legitimate transaction (all-zeros V features):**
+The `V1`–`V28` variables are anonymized PCA components. They do not directly represent business attributes such as customer age, gender, merchant name or location.
 
-```json
-{
-    "model":             "Random Forest",
-    "prediction":        0,
-    "fraud_probability": 0.0,
-    "risk_level":        "LOW RISK",
-    "is_fraud":          false,
-    "input_summary": {
-        "Time":   50000.0,
-        "Amount": 100.0,
-        "Hour":   13
-    }
-}
-```
+### Isolation Forest
 
-**Fraudulent transaction (V14 = -9.47):**
-
-```json
-{
-    "model":             "Logistic Regression",
-    "prediction":        1,
-    "fraud_probability": 1.0,
-    "risk_level":        "CRITICAL RISK",
-    "is_fraud":          true,
-    "input_summary": {
-        "Time":   406.0,
-        "Amount": 1.0,
-        "Hour":   0
-    }
-}
-```
-
-**Risk levels:**
-
-| Probability | Risk Level |
-|:-----------:|-----------|
-| < 30% | LOW RISK |
-| 30% – 60% | MEDIUM RISK |
-| 60% – 80% | HIGH RISK |
-| > 80% | CRITICAL RISK |
-
-**Error response (400 Bad Request):**
-
-```json
-{
-    "error": "Missing required fields",
-    "missing": ["V14", "V15", "Amount"],
-    "required": ["Time", "V1", "V2", "...", "V28", "Amount"]
-}
-```
-
----
-
-## 16. Frontend Pages
-
-| # | Page | Description |
-|---|------|-------------|
-| 1 | **Dashboard** | 5 KPI cards (totals, fraud %, amounts); class distribution donut; mean-amount bar chart; model summary table; Flask API status panel |
-| 2 | **Dataset Analysis** | Dataset source facts; class imbalance warning; descriptive statistics (2,000-row sample); amount by class; raw data viewer |
-| 3 | **EDA / Visualizations** | 7 full-resolution charts: class distribution, amount distribution, time distribution, fraud by hour, amount boxplot, top-10 PCA features, correlation heatmap |
-| 4 | **Model Performance** | Metrics table (green-highlighted best values); interactive metric bar chart; ROC curves; Precision-Recall curves; confusion matrix grid with drill-down |
-| 5 | **Fraud Prediction** | Model selector; Time + Amount + V1–V28 input form; calls `POST /predict`; fraud probability; risk gauge (0–100%); risk interpretation |
-| 6 | **Batch Prediction** | CSV upload; column validation; calls `POST /predict/batch` in chunks; KPI cards; risk distribution chart; downloadable results CSV |
-| 7 | **About** | System architecture; dataset facts; pipeline steps; API endpoint table; technology stack; live model results |
-
----
-
-## 17. Data Preprocessing
-
-| Step | Details |
-|------|---------|
-| **Deduplication** | 1,081 exact duplicates removed **before** any split |
-| **Feature engineering** | `Amount_log = log1p(Amount)`, `Hour = (Time // 3600) % 24` |
-| **Stratified split** | 80% train / 20% test — preserves 0.17% fraud ratio in both sets |
-| **RobustScaler** | Fitted on training set only; transforms both sets |
-| **SMOTE** | Applied to training fold only: 378 → 226,602 fraud samples |
-
----
-
-## 18. Data Leakage Prevention
-
-| Risk | Prevention |
-|------|-----------|
-| Duplicates in both splits | Deduplication happens **before** splitting |
-| Test-set statistics in scaler | `RobustScaler.fit()` called only on `X_train` |
-| Synthetic samples in test set | SMOTE applied only to `X_train` after splitting |
-| Test metrics inflated | All evaluation done on the locked-away test set |
-
----
-
-## 19. How the ML Pipeline Works
-
-```
-creditcard.csv
-    │
-    ▼
-[1] Load + deduplicate (1,081 rows removed)
-    │
-    ▼
-[2] Feature engineering  (Amount_log, Hour)
-    │
-    ▼
-[3] Stratified 80/20 split
-    │
-    ├──── [4] RobustScaler.fit_transform(X_train) ──► SMOTE(X_train) ──► Train 5 models
-    │
-    └──── [4b] scaler.transform(X_test) ──────────────────────────────► Evaluate all models
-    │
-    ▼
-[5] Save: scaler.joblib  feature_cols.joblib  *.joblib (5 models)
-    Save: eval_results.joblib  dataset_stats.joblib
-    │
-    ▼
-[6] Flask API loads saved artifacts → serves /predict endpoint
-    │
-    ▼
-[7] Streamlit frontend calls Flask API → displays results
-```
+Isolation Forest produces an anomaly score rather than a calibrated fraud probability.
 
 ---
 
 ## 20. Limitations
 
-- V1–V28 are anonymised PCA components — no domain interpretation possible.
-- Dataset covers only 48 hours in September 2013; fraud patterns evolve over time.
-- Isolation Forest (F1 = 0.2617) is significantly weaker than supervised models.
-- No sequential or customer-level features (velocity, recency, merchant history).
-- The Flask API has no authentication — for production use, add API keys or OAuth.
-- PCA was applied before the dataset's public release; upstream leakage cannot be verified.
+The project has several limitations:
+
+* The dataset contains anonymized PCA features.
+* Real-time banking transaction integration is not included.
+* The model is trained on a historical dataset.
+* Risk thresholds are demonstration thresholds.
+* Production deployment would require continuous monitoring and retraining.
+* Additional business and customer features could improve practical fraud detection.
 
 ---
 
-## 21. Future Scope
+## 21. Future Enhancements
 
-- Add JWT-based authentication to the Flask API for production deployment.
-- Add LSTM/Transformer sequence models for temporal fraud patterns.
-- Add SHAP explainability for per-transaction decision transparency.
-- Deploy Flask API on cloud (AWS Lambda, Google Cloud Run) with auto-scaling.
-- Add real-time Kafka streaming for millisecond-latency fraud screening.
-- Build a meta-learner ensemble stacking all five models.
-- Add concept drift monitoring and automatic model retraining.
+Possible future improvements include:
 
----
-
-## 22. Conclusion
-
-This project delivers a production-style, two-tier fraud detection system with a **Flask REST API backend** and a **Streamlit frontend**. Five ML models were trained on the Kaggle Credit Card Fraud Detection dataset under a rigorous no-leakage pipeline.
-
-**Random Forest** achieved the best F1-Score (0.8588), detecting 76 of 95 fraud cases in the test set with only 6 false positives. **XGBoost** achieved the highest ROC-AUC (0.9775).
-
-The Flask API correctly handles input validation (missing fields, invalid models, negative values) and returns structured JSON responses. The Streamlit frontend communicates with the API for all predictions, clearly separating concerns between the UI and the ML inference layer.
+* Real-time transaction streaming
+* Cloud deployment
+* API integration
+* Model monitoring
+* Automated retraining
+* Explainable AI using SHAP
+* Advanced hyperparameter tuning
+* Cost-sensitive learning
+* Real-time alert generation
+* Database integration
+* Authentication and role-based access
 
 ---
 
-## 23. Dataset Reference
+## 22. Resume / Portfolio Value
 
-**Kaggle Credit Card Fraud Detection Dataset**  
-URL: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud  
-Publisher: ULB Machine Learning Group (Worldline)
+This project demonstrates practical skills in:
 
-> Dal Pozzolo A., Caelen O., Johnson R.A., Bontempi G. (2015).  
-> *Calibrating Probability with Undersampling for Unbalanced Classification.*  
-> IEEE Symposium on Computational Intelligence and Data Mining (CIDM).
+* Python
+* Pandas
+* NumPy
+* Scikit-learn
+* XGBoost
+* LightGBM
+* Imbalanced-learn
+* Machine Learning
+* Fraud Detection
+* Feature Engineering
+* Exploratory Data Analysis
+* Model Evaluation
+* Streamlit
+* Data Visualization
+* End-to-End ML Project Development
+
+### Resume Project Description
+
+**AI-Powered Financial Fraud Detection & Risk Analytics System**
+
+Built an end-to-end machine learning fraud detection system using Logistic Regression, Random Forest, XGBoost, LightGBM and Isolation Forest. Implemented SMOTE for class imbalance, feature engineering, fraud-focused evaluation using Precision, Recall, F1, ROC-AUC and PR-AUC, and developed an interactive Streamlit dashboard for single and batch transaction risk prediction.
 
 ---
 
-*Developed for IBM SkillsBuild Academic Internship · Python 3.11 · Flask · Streamlit*
+## 23. Author
+
+**Salapareddi Laxmana**
+
+IBM SkillsBuild Academic Internship 2026
+Data Analytics with AI | BharatCares
+
+---
+
+## 24. Repository
+
+```text
+GitHub Repository:
+
+https://github.com/laxmanalucky090-ux/AI-Financial-Fraud-Detection
+```
