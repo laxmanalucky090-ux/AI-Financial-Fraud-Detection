@@ -566,7 +566,7 @@ def run_streamlit_app():
     # ── Page config ───────────────────────────────────────────────────────────
     st.set_page_config(
         page_title="Financial Fraud Detection",
-        page_icon="shield",
+        page_icon="🛡️",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -720,7 +720,7 @@ def run_streamlit_app():
 | Legitimate | {stats['legit_count']:,} | {stats['legit_pct']:.4f}% |
 | Fraud | {stats['fraud_count']:,} | {stats['fraud_pct']:.4f}% |
                     """)
-                    st.warning("578 legitimate transactions per 1 fraud. "
+                    st.warning("599 legitimate transactions per 1 fraud. "
                                "Accuracy is not a valid metric — use F1, ROC-AUC, PR-AUC.")
 
         with tab2:
