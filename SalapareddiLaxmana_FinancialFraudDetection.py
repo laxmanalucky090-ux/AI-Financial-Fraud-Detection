@@ -572,60 +572,192 @@ def run_streamlit_app():
     )
 
     # ── CSS ───────────────────────────────────────────────────────────────────
-    st.markdown("""
-<style>
+       # ========================================================
+    # CLEAN HIGH-CONTRAST UI
+    # ========================================================
 
-/* Main application background */
-.stApp {
-    background-color: #ffffff;
-}
+    st.markdown(
+        """
+        <style>
 
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    background-color: #1a1f2e;
-}
+        /* MAIN APP */
+        .stApp {
+            background: #F1F5F9 !important;
+        }
 
-section[data-testid="stSidebar"] * {
-    color: #e8eaf6 !important;
-}
+        [data-testid="stAppViewContainer"] {
+            background: #F1F5F9 !important;
+        }
 
-/* Sidebar radio buttons */
-section[data-testid="stSidebar"] [role="radiogroup"] label {
-    color: #e8eaf6 !important;
-}
+        [data-testid="stHeader"] {
+            background: #0F172A !important;
+        }
 
-/* Metric cards */
-div[data-testid="metric-container"] {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 14px;
-}
+        /* ALL NORMAL TEXT */
+        p, li, label {
+            color: #0F172A !important;
+        }
 
-/* Section headings */
-.section-header {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: #111827;
-    background-color: #ffffff;
-    border-left: 4px solid #3b82f6;
-    border-radius: 4px;
-    padding: 10px 12px;
-    margin-bottom: 1rem;
-}
+        /* HEADINGS */
+        h1, h2, h3, h4, h5, h6 {
+            color: #0F172A !important;
+            font-weight: 800 !important;
+        }
 
-/* Sub-headings */
-h3, h4 {
-    color: #111827;
-}
+        /* SIDEBAR */
+        [data-testid="stSidebar"] {
+            background: #0F172A !important;
+        }
 
-/* Horizontal separators */
-hr {
-    border-color: #e5e7eb;
-}
+        [data-testid="stSidebar"] * {
+            color: #FFFFFF !important;
+        }
 
-</style>
-""", unsafe_allow_html=True)
+        /* SIDEBAR RADIO */
+        [data-testid="stSidebar"] label {
+            color: #FFFFFF !important;
+            font-weight: 600 !important;
+        }
+
+        /* TABS */
+        button[data-baseweb="tab"] {
+            color: #0F172A !important;
+            font-weight: 700 !important;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"] {
+            color: #0369A1 !important;
+            font-weight: 800 !important;
+        }
+
+        /* INFO / FACT CARDS */
+        .info-card,
+        .fact-box,
+        .metric-card {
+            background: #FFFFFF !important;
+            border: 2px solid #CBD5E1 !important;
+            border-radius: 12px !important;
+            padding: 20px !important;
+            margin: 10px 0 !important;
+            box-shadow: 0 3px 10px rgba(15,23,42,0.08) !important;
+        }
+
+        .info-card-title,
+        .fact-title {
+            color: #0369A1 !important;
+            font-weight: 800 !important;
+            font-size: 17px !important;
+        }
+
+        .info-card-text,
+        .fact-description {
+            color: #334155 !important;
+            font-size: 15px !important;
+            line-height: 1.6 !important;
+        }
+
+        .fact-value {
+            color: #0F172A !important;
+            font-size: 30px !important;
+            font-weight: 900 !important;
+        }
+
+        /* METRIC CARDS */
+        [data-testid="stMetric"] {
+            background: #FFFFFF !important;
+            border: 2px solid #CBD5E1 !important;
+            border-radius: 12px !important;
+            padding: 18px !important;
+        }
+
+        [data-testid="stMetricLabel"] {
+            color: #475569 !important;
+        }
+
+        [data-testid="stMetricLabel"] * {
+            color: #475569 !important;
+            font-weight: 700 !important;
+        }
+
+        [data-testid="stMetricValue"] * {
+            color: #0F172A !important;
+            font-weight: 900 !important;
+            font-size: 30px !important;
+        }
+
+        /* DATAFRAMES */
+        [data-testid="stDataFrame"] {
+            background: #FFFFFF !important;
+            border: 1px solid #CBD5E1 !important;
+        }
+
+        /* INPUTS */
+        input, textarea {
+            color: #0F172A !important;
+            background: #FFFFFF !important;
+        }
+
+        /* SELECTBOX */
+        div[data-baseweb="select"] > div {
+            background: #FFFFFF !important;
+            color: #0F172A !important;
+        }
+
+        div[data-baseweb="select"] * {
+            color: #0F172A !important;
+        }
+
+        /* BUTTONS */
+        .stButton > button {
+            background: #0369A1 !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-weight: 800 !important;
+            padding: 10px 18px !important;
+        }
+
+        .stButton > button:hover {
+            background: #075985 !important;
+            color: #FFFFFF !important;
+        }
+
+        /* ALERTS */
+        [data-testid="stAlert"] * {
+            color: #0F172A !important;
+        }
+
+        /* CODE */
+        code {
+            color: #0F172A !important;
+            background: #E2E8F0 !important;
+        }
+
+        /* MAIN TITLE */
+        .main-title {
+            color: #0F172A !important;
+            font-size: 36px !important;
+            font-weight: 900 !important;
+            margin-bottom: 5px !important;
+        }
+
+        .main-subtitle {
+            color: #475569 !important;
+            font-size: 18px !important;
+            margin-bottom: 25px !important;
+        }
+
+        /* FOOTER */
+        .footer {
+            color: #475569 !important;
+            text-align: center !important;
+            padding: 30px !important;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # ── Cached loaders ────────────────────────────────────────────────────────
     @st.cache_resource
