@@ -1193,16 +1193,67 @@ def run_streamlit_app():
 
         /* 1. FORCE ENTIRE BACKGROUND TO DARK SLATE */
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-            background-color: #0F172A !important;
-            color: #F8FAFC !important;
+            background-color: #7DD3FC !important;
+            color: #38BDF8 !important;
         }
 
         /* 2. FORCE ALL TEXT, LABELS, PARAGRAPHS TO VISIBLE WHITE/SLATE */
         p, span, label, li, div, h1, h2, h3, h4, h5, h6 {
+            color: #FFFFFF !important;
+        }
+
+        /* 3. FIX METRIC CARDS (HIGH CONTRAST & CLEAR VISIBILITY) */
+        [data-testid="stMetric"] {
+            background-color: #FFFFFF !important; /* Pure White Card for high contrast */
+            border: 2px solid #0F172A !important;   /* Solid Dark Navy Border */
+            border-radius: 12px !important;
+            padding: 16px !important;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15) !important;
+        }
+
+        [data-testid="stMetricLabel"] * {
+            color: #334155 !important;             /* Dark Slate Blue for Subheadings */
+            font-weight: 700 !important;
+            font-size: 14px !important;
+        }
+
+        [data-testid="stMetricValue"] * {
+            color: #0F172A !important;             /* Deep Dark Navy for Numbers (Maximum Visibility) */
+            font-weight: 900 !important;
+            font-size: 32px !important;
+        }
+
+        [data-testid="stMetricLabel"] * {
+            color: #94A3B8 !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+        }
+-----------------------------------------------------------------------
+# ========================================================
+    # HIGH-CONTRAST PROFESSIONAL DARK UI
+    # ========================================================
+
+    st.markdown(
+        """
+        <style>
+
+        /* 1. FORCE APP BACKGROUND & DEFAULT TEXT COLOR */
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+            background-color: #0F172A !important;
             color: #F8FAFC !important;
         }
 
-        /* 3. FIX METRIC CARDS (TOTAL TRANSACTIONS, AMOUNTS, ETC.) */
+        /* 2. HEADINGS & GENERAL TEXT VISIBILITY */
+        h1, h2, h3, h4, h5, h6 {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
+
+        p, span, label, li, div {
+            color: #E2E8F0 !important;
+        }
+
+        /* 3. STREAMLIT NATIVE METRIC CARDS */
         [data-testid="stMetric"] {
             background-color: #1E293B !important;
             border: 1px solid #334155 !important;
@@ -1219,11 +1270,11 @@ def run_streamlit_app():
 
         [data-testid="stMetricValue"] * {
             color: #FFFFFF !important;
-            font-weight: 800 !important;
+            font-weight: 900 !important;
             font-size: 32px !important;
         }
 
-        /* 4. FIX CUSTOM METRIC CARDS & HEADINGS */
+        /* 4. CUSTOM METRIC CARDS & FACT BOXES */
         .metric-card, .info-card, .fact-box {
             background-color: #1E293B !important;
             border: 1px solid #334155 !important;
@@ -1234,14 +1285,17 @@ def run_streamlit_app():
         .metric-label, .fact-title {
             color: #38BDF8 !important;
             font-weight: 700 !important;
+            font-size: 13px !important;
+            text-transform: uppercase;
         }
 
         .metric-value, .fact-value {
             color: #FFFFFF !important;
-            font-weight: 800 !important;
+            font-weight: 900 !important;
+            font-size: 28px !important;
         }
 
-        /* 5. SIDEBAR STYLING FIX */
+        /* 5. SIDEBAR STYLING */
         [data-testid="stSidebar"] {
             background-color: #090D16 !important;
             border-right: 1px solid #334155 !important;
@@ -1266,6 +1320,7 @@ def run_streamlit_app():
         """,
         unsafe_allow_html=True
     )
+
     # ========================================================
     # SIDEBAR
     # ========================================================
