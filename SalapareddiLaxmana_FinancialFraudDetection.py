@@ -580,47 +580,26 @@ def run_streamlit_app():
     color-scheme: light;
 }
 
-/* Main application background */
-.stApp {
+/* Whole app background */
+html, body, .stApp {
     background-color: #ffffff !important;
 }
 
-/* Force dark, readable text everywhere in the main content area */
-.main, .block-container,
-.main p, .main span, .main li, .main label, .main div,
-.main h1, .main h2, .main h3, .main h4, .main h5, .main h6,
-[data-testid="stMarkdownContainer"],
-[data-testid="stMarkdownContainer"] * ,
-[data-testid="stText"],
-[data-testid="stCaptionContainer"],
-[data-testid="stMetricLabel"],
-[data-testid="stMetricValue"],
-[data-testid="stMetricDelta"],
-[data-testid="stWidgetLabel"],
-[data-testid="stExpander"] summary,
-.stSelectbox label, .stNumberInput label, .stRadio label,
-.stDataFrame, .stTable {
-    color: #111827 !important;
+/* BULLETPROOF RULE: make absolutely everything dark text by default.
+   This does not depend on any specific Streamlit class name, so it
+   cannot silently miss an element the way targeted selectors can. */
+* {
+    color: #111111 !important;
 }
 
-/* Inputs, selects and their inner text */
-[data-testid="stSelectbox"] div, [data-testid="stNumberInput"] input {
-    color: #111827 !important;
-    background-color: #ffffff !important;
+/* Now explicitly re-light only the sidebar (it has a dark background) */
+section[data-testid="stSidebar"],
+section[data-testid="stSidebar"] * {
+    color: #f5f5f5 !important;
 }
 
-/* Sidebar (kept dark, with light text) */
 section[data-testid="stSidebar"] {
     background-color: #1a1f2e !important;
-}
-
-section[data-testid="stSidebar"] * {
-    color: #e8eaf6 !important;
-}
-
-/* Sidebar radio buttons */
-section[data-testid="stSidebar"] [role="radiogroup"] label {
-    color: #e8eaf6 !important;
 }
 
 /* Metric cards */
@@ -635,7 +614,6 @@ div[data-testid="metric-container"] {
 .section-header {
     font-size: 1.3rem;
     font-weight: 700;
-    color: #111827 !important;
     background-color: #ffffff;
     border-left: 4px solid #3b82f6;
     border-radius: 4px;
@@ -643,24 +621,19 @@ div[data-testid="metric-container"] {
     margin-bottom: 1rem;
 }
 
-/* Sub-headings */
-h3, h4 {
-    color: #111827 !important;
-}
-
 /* Horizontal separators */
 hr {
-    border-color: #e5e7eb !important;
+    border-color: #cccccc !important;
 }
 
-/* Tabs */
-[data-testid="stTabs"] button {
-    color: #111827 !important;
+/* Buttons: keep readable white text on colored buttons */
+button[kind="primary"], button[kind="primary"] * {
+    color: #ffffff !important;
 }
 
-/* Alerts (info/warning/success/error) keep readable text on their own tint */
-[data-testid="stAlert"] p {
-    color: #111827 !important;
+/* Code blocks: keep their own light-on-dark styling readable */
+[data-testid="stCodeBlock"], [data-testid="stCodeBlock"] * {
+    color: #f5f5f5 !important;
 }
 
 </style>
