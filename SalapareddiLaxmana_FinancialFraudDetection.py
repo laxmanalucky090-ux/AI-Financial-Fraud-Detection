@@ -610,6 +610,30 @@ div[data-testid="metric-container"] {
     padding: 14px;
 }
 
+/* st.metric() internals need direct, high-priority targeting —
+   their built-in styling is more specific than a plain "*" rule */
+[data-testid="stMetricValue"],
+[data-testid="stMetricValue"] div {
+    color: #111111 !important;
+    font-weight: 700 !important;
+}
+
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p,
+[data-testid="stMetricLabel"] div {
+    color: #4b5563 !important;
+    font-weight: 600 !important;
+}
+
+[data-testid="stMetricDelta"],
+[data-testid="stMetricDelta"] div {
+    color: #111111 !important;
+}
+
+[data-testid="stMetricDelta"] svg {
+    fill: #111111 !important;
+}
+
 /* Section headings */
 .section-header {
     font-size: 1.3rem;
