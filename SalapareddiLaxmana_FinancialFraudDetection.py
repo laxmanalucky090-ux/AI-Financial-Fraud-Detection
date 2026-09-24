@@ -859,7 +859,6 @@ td {
         if models_ready():
             st.success("Models Ready")
         else:
-            st.error("Run: python SalapareddiLaxmana_FinancialFraudDetection.py")
         st.caption("Kaggle Credit Card Fraud Detection")
 
     stats   = _load_stats()
@@ -872,7 +871,6 @@ td {
         st.markdown('<div class="section-header">Dashboard — Overview</div>', unsafe_allow_html=True)
 
         if not stats:
-            st.warning("Run `python SalapareddiLaxmana_FinancialFraudDetection.py` first.")
             st.stop()
 
         c1,c2,c3,c4,c5 = st.columns(5)
