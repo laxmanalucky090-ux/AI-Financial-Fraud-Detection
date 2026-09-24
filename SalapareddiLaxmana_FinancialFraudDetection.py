@@ -1183,64 +1183,67 @@ def run_streamlit_app():
     # PROFESSIONAL DARK UI
 
 
-    # ========================================================
-    # HIGH-CONTRAST PROFESSIONAL DARK UI
+# ========================================================
+    # HIGH-CONTRAST DARK UI OVERRIDE (COMPLETE FIX)
     # ========================================================
 
     st.markdown(
         """
         <style>
 
-        /* ====================================================
-           GLOBAL BACKGROUND & TYPOGRAPHY
-        ==================================================== */
-
-        .stApp {
-            background: #090D16 !important;
+        /* 1. FORCE ENTIRE BACKGROUND TO DARK SLATE */
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+            background-color: #0F172A !important;
             color: #F8FAFC !important;
         }
 
-        [data-testid="stAppViewContainer"] {
-            background: #090D16 !important;
+        /* 2. FORCE ALL TEXT, LABELS, PARAGRAPHS TO VISIBLE WHITE/SLATE */
+        p, span, label, li, div, h1, h2, h3, h4, h5, h6 {
+            color: #F8FAFC !important;
         }
 
-        [data-testid="stHeader"] {
-            background: rgba(15, 23, 42, 0.8) !important;
-            backdrop-filter: blur(8px);
+        /* 3. FIX METRIC CARDS (TOTAL TRANSACTIONS, AMOUNTS, ETC.) */
+        [data-testid="stMetric"] {
+            background-color: #1E293B !important;
+            border: 1px solid #334155 !important;
+            border-radius: 12px !important;
+            padding: 16px !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
         }
 
-        html, body, [class*="css"] {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-        }
-
-        p, span, label, li {
-            color: #E2E8F0 !important;
-        }
-
-        [data-testid="stMarkdownContainer"] p,
-        [data-testid="stMarkdownContainer"] li {
-            color: #E2E8F0 !important;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-            color: #FFFFFF !important;
+        [data-testid="stMetricLabel"] * {
+            color: #94A3B8 !important;
             font-weight: 700 !important;
-            letter-spacing: -0.02em;
+            font-size: 14px !important;
         }
 
-        h1 { font-size: 40px !important; }
-        h2 { font-size: 30px !important; }
-        h3 { font-size: 22px !important; }
-        h4 { font-size: 18px !important; }
+        [data-testid="stMetricValue"] * {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+            font-size: 32px !important;
+        }
 
-        /* ====================================================
-           SIDEBAR STYLING
-        ==================================================== */
+        /* 4. FIX CUSTOM METRIC CARDS & HEADINGS */
+        .metric-card, .info-card, .fact-box {
+            background-color: #1E293B !important;
+            border: 1px solid #334155 !important;
+            border-radius: 12px !important;
+            padding: 20px !important;
+        }
 
+        .metric-label, .fact-title {
+            color: #38BDF8 !important;
+            font-weight: 700 !important;
+        }
+
+        .metric-value, .fact-value {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
+
+        /* 5. SIDEBAR STYLING FIX */
         [data-testid="stSidebar"] {
-            background-color: #0F172A !important;
+            background-color: #090D16 !important;
             border-right: 1px solid #334155 !important;
         }
 
@@ -1248,343 +1251,21 @@ def run_streamlit_app():
             color: #F8FAFC !important;
         }
 
-        /* Radio Buttons / Navigation */
-        [data-testid="stSidebar"] .stRadio > label {
-            color: #94A3B8 !important;
-            font-weight: 700 !important;
-            text-transform: uppercase;
-            font-size: 12px !important;
-            letter-spacing: 0.05em;
-            margin-bottom: 8px;
-        }
-
-        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-            background: #1E293B;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 10px 14px;
-            margin-bottom: 6px;
-            transition: all 0.2s ease;
-        }
-
-        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-            border-color: #38BDF8 !important;
-            background: #0F172A;
-        }
-
-        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
-            color: #FFFFFF !important;
-            font-size: 14px !important;
-            font-weight: 600 !important;
-        }
-
-        /* ====================================================
-           TITLES & HEADINGS
-        ==================================================== */
-
-        .main-title {
-            font-size: 42px;
-            font-weight: 800;
-            color: #FFFFFF !important;
-            margin-bottom: 6px;
-            line-height: 1.2;
-            letter-spacing: -0.02em;
-        }
-
-        .main-subtitle {
-            font-size: 16px;
-            color: #38BDF8 !important;
-            font-weight: 500;
-            margin-bottom: 28px;
-        }
-
-        /* ====================================================
-           CARDS & FACT BOXES
-        ==================================================== */
-
-        .info-card {
-            background: #0F172A;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-        }
-
-        .info-card-title {
-            color: #FFFFFF !important;
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .info-card-text {
-            color: #94A3B8 !important;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        .metric-card {
-            background: #0F172A;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 18px;
-            text-align: left;
-        }
-
-        .metric-label {
-            color: #94A3B8 !important;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .metric-value {
-            color: #FFFFFF !important;
-            font-size: 32px;
-            font-weight: 800;
-            margin-top: 4px;
-        }
-
-        .fact-box {
-            background: #0F172A;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 18px;
-            margin-bottom: 16px;
-        }
-
-        .fact-title {
-            color: #38BDF8 !important;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .fact-value {
-            color: #FFFFFF !important;
-            font-size: 26px;
-            font-weight: 800;
-            margin: 6px 0;
-        }
-
-        .fact-description {
-            color: #94A3B8 !important;
-            font-size: 13px;
-        }
-
-        /* ====================================================
-           NATIVE STREAMLIT METRICS
-        ==================================================== */
-
-        [data-testid="stMetric"] {
-            background: #0F172A !important;
-            border: 1px solid #334155 !important;
-            border-radius: 12px !important;
-            padding: 16px !important;
-        }
-
-        [data-testid="stMetricLabel"] {
-            color: #94A3B8 !important;
-            font-size: 13px !important;
-            font-weight: 600 !important;
-        }
-
-        [data-testid="stMetricValue"] {
-            color: #FFFFFF !important;
-            font-size: 28px !important;
-            font-weight: 800 !important;
-        }
-
-        [data-testid="stMetricDelta"] {
-            color: #38BDF8 !important;
-        }
-
-        /* ====================================================
-           TABS
-        ==================================================== */
-
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 6px;
-            background: #0F172A;
-            border-radius: 10px;
-            padding: 6px;
-            border: 1px solid #334155;
-        }
-
-        .stTabs [data-baseweb="tab"] {
-            color: #94A3B8 !important;
-            background: transparent;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 14px;
-            padding: 8px 16px;
-            border: none !important;
-        }
-
-        .stTabs [data-baseweb="tab"]:hover {
-            color: #FFFFFF !important;
-            background: #1E293B;
-        }
-
-        .stTabs [aria-selected="true"] {
-            color: #FFFFFF !important;
-            background: #0284C7 !important;
-        }
-
-        .stTabs [data-baseweb="tab-highlight"] {
-            display: none;
-        }
-
-        /* ====================================================
-           BUTTONS
-        ==================================================== */
-
-        .stButton > button {
-            background: #0284C7 !important;
-            color: #FFFFFF !important;
-            border: 1px solid #38BDF8 !important;
-            border-radius: 8px !important;
-            padding: 10px 20px !important;
-            font-weight: 700 !important;
-            font-size: 14px !important;
-            transition: all 0.2s ease !important;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .stButton > button:hover {
-            background: #0369A1 !important;
-            border-color: #7DD3FC !important;
-            color: #FFFFFF !important;
-        }
-
-        /* ====================================================
-           INPUTS, SELECTS & FORM CONTROLS
-        ==================================================== */
-
-        input, textarea {
-            color: #FFFFFF !important;
-            background-color: #0F172A !important;
-            border: 1px solid #334155 !important;
-            border-radius: 8px !important;
-        }
-
-        input:focus, textarea:focus {
-            border-color: #38BDF8 !important;
-        }
-
-        div[data-baseweb="select"] > div {
-            background-color: #0F172A !important;
-            border-color: #334155 !important;
-            border-radius: 8px !important;
-            color: #FFFFFF !important;
-        }
-
-        div[data-baseweb="select"] span {
-            color: #FFFFFF !important;
-        }
-
-        /* Popover dropdown menu items */
-        [data-baseweb="popover"] ul {
-            background-color: #0F172A !important;
-            border: 1px solid #334155 !important;
-        }
-
-        [data-baseweb="popover"] li {
-            color: #FFFFFF !important;
-        }
-
-        [data-baseweb="popover"] li:hover {
-            background-color: #1E293B !important;
-        }
-
-        /* ====================================================
-           DATAFRAME & TABLES
-        ==================================================== */
-
+        /* 6. TABLES AND DATAFRAMES VISIBILITY */
         [data-testid="stDataFrame"] {
-            border: 1px solid #334155 !important;
-            border-radius: 10px !important;
-            background-color: #0F172A !important;
-        }
-
-        /* ====================================================
-           EXPANDERS & ALERTS
-        ==================================================== */
-
-        [data-testid="stExpander"] {
-            background: #0F172A !important;
-            border: 1px solid #334155 !important;
-            border-radius: 10px !important;
-        }
-
-        [data-testid="stExpander"] summary {
-            color: #FFFFFF !important;
-            font-weight: 700 !important;
-        }
-
-        [data-testid="stAlert"] {
-            background-color: #0F172A !important;
-            border-radius: 10px !important;
+            background-color: #1E293B !important;
             border: 1px solid #334155 !important;
         }
 
-        [data-testid="stAlert"] p {
-            color: #FFFFFF !important;
-        }
-
-        /* ====================================================
-           CODE & FILE UPLOADER
-        ==================================================== */
-
-        code {
-            color: #38BDF8 !important;
-            background: #0F172A !important;
-            padding: 2px 6px !important;
-            border-radius: 4px !important;
-            border: 1px solid #334155 !important;
-        }
-
-        pre {
-            background: #0F172A !important;
-            border: 1px solid #334155 !important;
-            border-radius: 8px !important;
-        }
-
-        [data-testid="stFileUploader"] {
-            background: #0F172A !important;
-            border: 2px dashed #334155 !important;
-            border-radius: 10px !important;
-            padding: 16px !important;
-        }
-
-        [data-testid="stFileUploader"]:hover {
-            border-color: #38BDF8 !important;
-        }
-
-        hr {
-            border-color: #334155 !important;
-        }
-
-        /* ====================================================
-           FOOTER
-        ==================================================== */
-
-        .footer {
-            text-align: center;
-            color: #64748B !important;
-            font-size: 13px;
-            margin-top: 40px;
-            padding: 20px;
-            border-top: 1px solid #334155;
+        /* 7. PLOTLY CHART BACKGROUND FIX */
+        .js-plotly-plot .plotly .main-svg {
+            background-color: #1E293B !important;
         }
 
         </style>
         """,
         unsafe_allow_html=True
     )
-
     # ========================================================
     # SIDEBAR
     # ========================================================
