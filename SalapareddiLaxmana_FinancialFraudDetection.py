@@ -856,10 +856,10 @@ td {
             "About",
         ], label_visibility="collapsed")
         st.markdown("---")
-        if models_ready():
-           st.success("Models Ready")
-        else:
-            st.caption("Kaggle Credit Card Fraud Detection")
+      if models_ready():
+          st.success("Models Ready")
+      else:
+          st.caption("Kaggle Credit Card Fraud Detection")
           
     stats   = _load_stats()
     results = _load_eval()
