@@ -1,0 +1,12 @@
+{
+  "total_rows": 283726,
+  "fraud_count": 473,
+  "legit_count": 283253,
+  "fraud_pct": 0.1667101358352777,
+  "legit_pct": 99.83328986416473,
+  "mean_amount": 88.47268731099723,
+  "mean_amount_fraud": 123.87186046511628,
+  "mean_amount_legit": 88.41357475472458,
+  "max_amount": 25691.16,
+  "best_model": "Random Forest"
+}
